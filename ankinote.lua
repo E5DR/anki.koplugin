@@ -77,7 +77,7 @@ function AnkiNote:get_custom_context(pre_s, pre_c, post_s, post_c)
         self:init_context_buffer(self.context_size)
     end
 
-    local delims_map = u.to_set(util.splitToChars("？」。.?!！"))
+    local delims_map = u.to_set(util.splitToChars("「」『』（）【】、。！？().?!,\"'"))
     -- calculate the slice of the `prev_context_table` array that should be prepended to the lookupword
     local prev_idx, prev_s_idx = 0, 0
     while prev_s_idx < pre_s do
