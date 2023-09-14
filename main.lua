@@ -115,11 +115,11 @@ function AnkiWidget:init()
     DictQuickLookup.tweak_buttons_func = function(popup_dict, buttons)
         self.add_to_anki_btn = {
             id = "add_to_anki",
-            text = _("Add to Anki"),
+            text = _("Add to Anki with context"),
             font_bold = true,
             callback = function()
                 self.current_note = self.anki_note:new(popup_dict)
-                self.anki_connect:add_note(self.current_note)
+                self:show_custom_context_widget()
             end,
             hold_callback = function()
                 self.current_note = self.anki_note:new(popup_dict)
