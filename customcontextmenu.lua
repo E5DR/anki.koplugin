@@ -188,12 +188,12 @@ function CustomContextMenu:reset()
 end
 
 function CustomContextMenu:reset_prev()
-    self.prev_s_cnt = 2
+    self.prev_s_cnt = 1
     self.prev_c_cnt = 0
 end
 
 function CustomContextMenu:reset_next()
-    self.next_s_cnt = 2
+    self.next_s_cnt = 1
     self.next_c_cnt = 0
 end
 
