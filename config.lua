@@ -30,7 +30,7 @@ local Config = {
     word_field = "VocabKanji",
 
     -- The field name where the sentence in which the word we looked up occurred will be sent to.
-    context_field = "SentKanji",
+    context_field = "Sentence-Kanji",
 
     -- [REQUIRED] The field name where the dictionary definition will be sent to.
     def_field = "VocabDef",
@@ -41,7 +41,7 @@ local Config = {
 
     -- The plugin can query Forvo for audio of the word you just looked up.
     -- The field name where the audio will be sent to.
-    audio_field = "VocabAudio",
+    audio_field = "Vocabulary-Audio",
 
     -- list of extensions which should be enabled, by default they are all off
     -- an extension is turned on by listing its filename in the table below
