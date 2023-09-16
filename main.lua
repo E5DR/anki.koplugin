@@ -27,12 +27,6 @@ function AnkiWidget:show_config_widget()
             {{ text = ("Sync (%d) offline note(s)"):format(note_count), id = "sync", enabled = note_count > 0, callback = function() self.anki_connect:sync_offline_notes() end }},
             {{ text = "Add with custom tags", id = "custom_tags", callback = with_custom_tags_cb }},
             {{
-                text = "Add with custom context",
-                id = "custom_context",
-                enabled = self.current_note.contextual_lookup,
-                callback = function() self:show_custom_context_widget() end
-            }},
-            {{
                 text = "Delete latest note",
                 id = "note_delete",
                 enabled = self.anki_connect.latest_synced_note ~= nil,
@@ -52,7 +46,6 @@ function AnkiWidget:show_custom_context_widget()
         self.current_note:set_custom_context(m.prev_s_cnt, m.prev_c_cnt, m.next_s_cnt, m.next_c_cnt)
         self.anki_connect:add_note(self.current_note)
         self.context_menu:onClose()
-        self.config_widget:onClose()
     end
     self.context_menu = CustomContextMenu:new{
         note = self.current_note, -- to extract context out of
