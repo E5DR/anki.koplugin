@@ -78,6 +78,8 @@ function AnkiNote:get_custom_context(pre_s, pre_c, post_s, post_c)
     end
 
     local delims_map = u.to_set(util.splitToChars("「」『』（）【】、。！？().?!,\"'"))
+    local whitespace_map = u.to_set(util.splitToChars(" 　〿\t\n"))
+
     -- calculate the slice of the `prev_context_table` array that should be prepended to the lookupword
     local prev_idx, prev_s_idx = 0, 0
     while prev_s_idx < pre_s do
@@ -93,6 +95,16 @@ function AnkiNote:get_custom_context(pre_s, pre_c, post_s, post_c)
     if prev_idx > 0 then
         -- do not include the trailing character (if we parsed any sentences above)
         prev_idx = prev_idx - 1
+    end
+    while prev_idx - 1 > 0 do
+        -- remove prepending whitespace, going from left to right
+        local idx = #self.prev_context_table - (prev_idx - 1)
+        local ch = self.prev_context_table[idx]
+        if whitespace_map[ch] then
+            prev_idx = prev_idx - 1
+        else
+            break
+        end
     end
     prev_idx = prev_idx + pre_c
     if #self.prev_context_table <= prev_idx then expand_content() end
