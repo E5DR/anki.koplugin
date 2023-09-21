@@ -87,19 +87,20 @@ function CustomContextMenu:init()
     local prev_s_inc = function(inc) update({ prev_c = 0, prev_s = self.prev_s_cnt + inc}) end
     local next_s_inc = function(inc) update({ next_c = 0, next_s = self.next_s_cnt + inc}) end
 
+    -- todo: use a setting for the number of chars a hold action should add / delete
     local remove_prev_sentence = make_button("⏩", btn_width, function() prev_s_inc(-1) end, can_prepend)
     local remove_prev_char =     make_button("1-", btn_width, function() prev_c_inc(-1) end, can_prepend)
-    remove_prev_char.hold_callback = function() prev_c_inc(-10) end
+    remove_prev_char.hold_callback = function() prev_c_inc(-8) end
     local append_prev_char =     make_button("+1", btn_width, function() prev_c_inc(1) end)
-    append_prev_char.hold_callback = function() prev_c_inc(10) end
+    append_prev_char.hold_callback = function() prev_c_inc(8) end
     local append_prev_sentence = make_button("⏪", btn_width, function() prev_s_inc(1) end)
     local reset_prev =           make_button("Reset", btn_width*2, function() self:reset_prev(); return self:update_context() end)
 
     local remove_next_sentence = make_button("⏪", btn_width, function() next_s_inc(-1) end, can_append)
     local remove_next_char =     make_button("-1", btn_width, function() next_c_inc(-1) end, can_append)
-    remove_next_char.hold_callback = function() next_c_inc(-10) end
+    remove_next_char.hold_callback = function() next_c_inc(-8) end
     local append_next_char =     make_button("1+", btn_width, function() next_c_inc(1) end)
-    append_next_char.hold_callback = function() next_c_inc(10) end
+    append_next_char.hold_callback = function() next_c_inc(8) end
     local append_next_sentence = make_button("⏩", btn_width, function() next_s_inc(1) end)
     local reset_next =           make_button("Reset", btn_width*2, function() self:reset_next(); self:update_context() end)
 
