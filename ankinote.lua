@@ -79,6 +79,8 @@ function AnkiNote:get_custom_context(pre_s, pre_c, post_s, post_c)
 
     local delims_map = u.to_set(util.splitToChars("「」『』（）【】、。！？().?!,\"'"))
     local whitespace_map = u.to_set(util.splitToChars(" 　〿\t\n"))
+    -- the trailing delimiter will not be included, except it is one of these
+    local keep_trailing_delims = u.to_set(util.splitToChars("、。！？.?!,"))
 
     -- calculate the slice of the `prev_context_table` array that should be prepended to the lookupword
     local prev_idx, prev_s_idx = 0, 0
@@ -125,6 +127,13 @@ function AnkiNote:get_custom_context(pre_s, pre_c, post_s, post_c)
     end
     -- do not include the trailing character
     next_idx = next_idx - 1
+    if next_idx > 0 then
+        -- do not include trailing delimiter, except it is one of these
+        local ch = self.next_context_table[next_idx]
+        if not keep_trailing_delims[ch] then
+            next_idx = next_idx - 1
+        end
+    end
     next_idx = next_idx + post_c
     if next_idx > #self.next_context_table then expand_content() end
     local appended_content = table.concat(self.next_context_table, "", 1, next_idx)
