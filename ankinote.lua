@@ -96,7 +96,7 @@ function AnkiNote:get_custom_context(pre_s, pre_c, post_s, post_c)
         -- do not include the trailing character (if we parsed any sentences above)
         prev_idx = prev_idx - 1
     end
-    while prev_idx - 1 > 0 do
+    while prev_idx > 0 do
         -- remove prepending whitespace, going from left to right
         local idx = #self.prev_context_table - (prev_idx - 1)
         local ch = self.prev_context_table[idx]
