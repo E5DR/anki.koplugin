@@ -19,19 +19,19 @@ local menu_entries = {
         name = "AnkiConnect URL",
         description = "The URL anki_connect is listening on.",
     },
-     {
+    {
         id = "deckName",
         group = general_settings,
         name = "Anki Deckname",
         description = "The name of the deck the new notes should be added to.",
     },
-     {
+    {
         id = "modelName",
         group = general_settings,
         name = "Anki Note Type",
         description = "The Anki note type our cards should use.",
     },
-     {
+    {
         id = "allow_dupes",
         group = general_settings,
         name = "Allow Duplicates",
@@ -45,14 +45,13 @@ local menu_entries = {
         description = "Anki Scope in which to look for duplicates",
         conf_type = "text",
     },
-     {
+    {
         id = "custom_tags",
         group = general_settings,
         name = "Custom Note Tags",
         description = "Provide custom tags to be added to a note.",
         conf_type = "list",
     },
-     {
     {
         id = "close_dictionary",
         group = general_settings,
@@ -88,24 +87,25 @@ local menu_entries = {
         description = "How many chars holding the ±1 buttons will jump",
         conf_type = "int", -- TODO
     },
+    {
         id = "word_field",
         group = note_settings,
         name = "Word Field",
         description = "Anki field for selected word.",
     },
-     {
+    {
         id = "context_field",
         group = note_settings,
         name = "Context Field",
         description = "Anki field for sentence selected word occured in.",
     },
-     {
+    {
         id = "def_field",
         group = note_settings,
         name = "Glossary Field",
         description = "Anki field for dictionary glossary.",
     },
-     {
+    {
         id = "meta_field",
         group = note_settings,
         name = "Metadata Field",
@@ -117,7 +117,7 @@ local menu_entries = {
         name = "Forvo Audio Field",
         description = "Anki field to store Forvo audio in.",
     },
-     {
+    {
         id = "img_field",
         group = note_settings,
         name = "Image Field",
@@ -366,7 +366,9 @@ function MenuBuilder:convert_opt(opt)
         sub_item_entry['sub_item_table'] = opt:build_checklist()
     elseif opt.conf_type == "map" then
         sub_item_entry['sub_item_table'] = opt:build_map_dialog()
-    else -- TODO multitable
+    elseif opt.conf_type == "multitable" then -- TODO multitable
+        sub_item_entry['enabled_func'] = function() return false end
+    elseif opt.conf_type == "int" then -- TODO int
         sub_item_entry['enabled_func'] = function() return false end
     end
     return sub_item_entry
