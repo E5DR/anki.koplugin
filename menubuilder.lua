@@ -54,6 +54,13 @@ local menu_entries = {
     },
      {
     {
+        id = "close_dictionary",
+        group = general_settings,
+        name = "Close dictionary window",
+        description = "Close dictionary window after adding a new card",
+        conf_type = "bool",
+    },
+    {
         id = "fragment_delimiters",
         group = custom_context_settings,
         name = "Fragment delimiters",

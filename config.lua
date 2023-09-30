@@ -22,6 +22,9 @@ local Config = {
     -- The scope where ankiconnect will look to to find duplicates
     dupe_scope = "deck",
 
+    -- Close dictionary window after adding a new card
+    -- Note: I don't know why, but if you set this to true, the corresponding menu item will remain stuck activated
+    close_dictionary = true,
 
     --------------------------------------------------
     --- [[ CUSTOM CONTEXT CONFIGURATION OPTIONS ]] ---

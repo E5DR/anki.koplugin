@@ -43,10 +43,15 @@ end
 function AnkiWidget:show_custom_context_widget()
     local function on_save_cb()
         local m = self.context_menu
-        self.current_note:set_custom_context(m.prev_s_cnt, m.prev_c_cnt, m.next_s_cnt, m.next_c_cnt)
         self.anki_connect:add_note(self.current_note)
-        self.context_menu:onClose()              -- close custom context menu
-        self.ui.dictionary.dict_window:onClose() -- close dictionary window
+        self.context_menu:onClose()
+        if self.user_config.close_dictionary:get_value() then
+            self.ui.dictionary.dict_window:onClose()
+            if self.config_widget then
+                self.config_widget:onClose()
+            end
+
+        end
     end
     self.context_menu = CustomContextMenu:new{
         note = self.current_note, -- to extract context out of
