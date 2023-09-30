@@ -61,6 +61,13 @@ local menu_entries = {
         conf_type = "bool",
     },
     {
+        id = "always_open_custom_context",
+        group = custom_context_settings,
+        name = "Always open custom context",
+        description = "Tapping the 'Add to Anki' button will always open the custom context window",
+        conf_type = "bool",
+    },
+    {
         id = "fragment_delimiters",
         group = custom_context_settings,
         name = "Fragment delimiters",

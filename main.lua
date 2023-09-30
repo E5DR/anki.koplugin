@@ -24,6 +24,12 @@ function AnkiWidget:show_config_widget()
     end
     self.config_widget = ButtonDialog:new {
         buttons = {
+            {{
+                text = "Add with custom context",
+                id = "custom_context",
+                enabled = self.current_note.contextual_lookup,
+                callback = function()self:show_custom_context_widget() end
+            }},
             {{ text = ("Sync (%d) offline note(s)"):format(note_count), id = "sync", enabled = note_count > 0, callback = function() self.anki_connect:sync_offline_notes() end }},
             {{ text = "Add with custom tags", id = "custom_tags", callback = with_custom_tags_cb }},
             {{
@@ -112,13 +118,21 @@ function AnkiWidget:init()
     -- Insert new button in the popup dictionary to allow adding anki cards
     -- TODO disable button if lookup was not contextual
     DictQuickLookup.tweak_buttons_func = function(popup_dict, buttons)
+        local btn_text = "Add to Anki"
+        if self.user_config.always_open_custom_context:get_value() then
+            btn_text = "Add to Anki with context"
+        end
         self.add_to_anki_btn = {
             id = "add_to_anki",
-            text = _("Add to Anki with context"),
+            text = _(btn_text),
             font_bold = true,
             callback = function()
                 self.current_note = self.anki_note:new(popup_dict)
-                self:show_custom_context_widget()
+                if self.user_config.always_open_custom_context:get_value() then
+                    self:show_custom_context_widget()
+                else
+                    self.anki_connect:add_note(self.current_note)
+                end
             end,
             hold_callback = function()
                 self.current_note = self.anki_note:new(popup_dict)

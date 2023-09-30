@@ -29,6 +29,10 @@ local Config = {
     --------------------------------------------------
     --- [[ CUSTOM CONTEXT CONFIGURATION OPTIONS ]] ---
     --------------------------------------------------
+    -- Tapping the 'Add to Anki' button will always open the custom context window if this is active
+    -- Otherwise, pressing this button will immediately create a new card with the default context.
+    -- Note: I don't know why, but if you set this to true, the corresponding menu item will remain stuck activated
+    always_open_custom_context = true,
     -- How many chars holding the ±1 buttons will jump inside the custom context window
     custom_context_jump_size = 8,
     -- Punctuation that is used to split sentences / sentence fragments (    buttons, also determines default context)
