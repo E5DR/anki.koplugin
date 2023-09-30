@@ -67,6 +67,13 @@ local menu_entries = {
         description = "Which trailing delimiters should be retained at the end of the context",
         conf_type = "text",
     },
+    {
+        id = "custom_context_jump_size",
+        group = custom_context_settings,
+        name = "±1 button jump count",
+        description = "How many chars holding the ±1 buttons will jump",
+        conf_type = "int", -- TODO
+    },
         id = "word_field",
         group = note_settings,
         name = "Word Field",
