@@ -23,6 +23,12 @@ local Config = {
     dupe_scope = "deck",
 
 
+    --------------------------------------------------
+    --- [[ CUSTOM CONTEXT CONFIGURATION OPTIONS ]] ---
+    --------------------------------------------------
+    -- Punctuation that is used to split sentences / sentence fragments (    buttons, also determines default context)
+    fragment_delimiters = "「」『』（）【】、。！？().?!,\"'",
+
     ----------------------------------------------
     --- [[ NOTE FIELD CONFIGURATION OPTIONS ]] ---
     ----------------------------------------------

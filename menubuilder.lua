@@ -8,6 +8,7 @@ local List = require("lua_utils.list")
 local general_settings = { "generic_settings", "General Settings" }
 local note_settings = { "note_settings", "Anki Note Settings" }
 local dictionary_settings = { "dictionary_settings", "Dictionary Settings" }
+local custom_context_settings = { "dictionary_settings", "Custom Context Settings" }
 
 -- 'raw' entries containing the strings displayed in the menu
 -- keys in the list should match the id of the underlying config option
@@ -52,6 +53,13 @@ local menu_entries = {
         conf_type = "list",
     },
      {
+    {
+        id = "fragment_delimiters",
+        group = custom_context_settings,
+        name = "Fragment delimiters",
+        description = "Punctuation that is used to split sentence fragments (    buttons)",
+        conf_type = "text",
+    },
         id = "word_field",
         group = note_settings,
         name = "Word Field",
@@ -300,7 +308,7 @@ function MenuBuilder:build()
     -- contains data as expected to be passed along to main config widget
     local sub_item_table = {}
     local grouping_func = function(x) return x.group[2] end
-    local group_order = { ["General Settings"] = 1, ["Anki Note Settings"] = 2, ["Dictionary Settings"] = 3 }
+    local group_order = { ["General Settings"] = 1, ["Anki Note Settings"] = 2, ["Dictionary Settings"] = 3, ["Custom Context Settings"] = 4 }
     for group, group_entries in pairs(List:new(menu_options):group_by(grouping_func):get()) do
         local menu_group = {}
         for _,opt in ipairs(group_entries) do

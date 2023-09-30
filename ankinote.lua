@@ -77,7 +77,7 @@ function AnkiNote:get_custom_context(pre_s, pre_c, post_s, post_c)
         self:init_context_buffer(self.context_size)
     end
 
-    local delims_map = u.to_set(util.splitToChars("「」『』（）【】、。！？().?!,\"'"))
+    local delims_map = u.to_set(util.splitToChars(self.conf.fragment_delimiters:get_value()))
     local whitespace_map = u.to_set(util.splitToChars(" 　〿\t\n"))
     -- the trailing delimiter will not be included, except it is one of these
     local keep_trailing_delims = u.to_set(util.splitToChars("、。！？.?!,"))
