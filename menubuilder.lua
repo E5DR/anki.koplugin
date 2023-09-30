@@ -60,6 +60,13 @@ local menu_entries = {
         description = "Punctuation that is used to split sentence fragments (    buttons)",
         conf_type = "text",
     },
+    {
+        id = "retained_trailing_delimiters",
+        group = custom_context_settings,
+        name = "Retained trailing delimiters",
+        description = "Which trailing delimiters should be retained at the end of the context",
+        conf_type = "text",
+    },
         id = "word_field",
         group = note_settings,
         name = "Word Field",

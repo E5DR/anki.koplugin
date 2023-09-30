@@ -28,6 +28,9 @@ local Config = {
     --------------------------------------------------
     -- Punctuation that is used to split sentences / sentence fragments (    buttons, also determines default context)
     fragment_delimiters = "「」『』（）【】、。！？().?!,\"'",
+    -- Which trailing delimiters should be retained at the end of the context
+    retained_trailing_delimiters = "、。！？.?!,",
+
 
     ----------------------------------------------
     --- [[ NOTE FIELD CONFIGURATION OPTIONS ]] ---
