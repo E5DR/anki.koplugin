@@ -65,83 +65,123 @@ end
 --[[
 -- Returns the context before and after the lookup word, the amount of context depends on the following parameters
 -- @param pre_s: amount of sentences prepended
+-- @param pre_p: amount of sentence parts prepended (between comma)
 -- @param pre_c: amount of characters prepended
 -- @param post_s: amount of sentences appended
+-- @param post_p: amount of sentence parts appended (between comma)
 -- @param post_c: amount of characters appended
 --]]
-function AnkiNote:get_custom_context(pre_s, pre_c, post_s, post_c)
-    logger.info("AnkiNote#get_custom_context()", pre_s, pre_c, post_s, post_c)
+function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c)
+    logger.info("AnkiNote#get_custom_context()", pre_s, pre_p, pre_c, post_s, post_p, post_c)
     -- called when initial size `self.context_size` becomes too small.
     local function expand_content()
         self.context_size = self.context_size + self.context_size
         self:init_context_buffer(self.context_size)
     end
+    --[[
+    -- Returns the length of the string until the n-th delimiter in search direction.
+    -- @param context_table: The table to be searched
+    -- @param n: We want to look for the n-th occurance of delim
+    -- @param delim: A set with the the limites that should be searched for
+    -- @param direction_backward: If this is true, the search will be carried out leftward starting
+    -- at the end.
+    -- @param len_offset: Offset for the start of the search. It is applied in the direction of the
+    -- search and included in the returned value (that is, the returned value is absolute, not relative).
+    --]]
+    local function my_func(context_table, len_offset, delim, n, direction_backward)
 
-    local delims_map = u.to_set(util.splitToChars(self.conf.fragment_delimiters:get_value()))
+        --                backwards     forwards  
+        -- idx:           ---->x        -->x      
+        --                cccccccccwwwwwcccccccccc
+        -- len_context:        x<--     -->x      
+
+        assert(type(len_offset) == "number")
+        assert(len_offset >= 0)
+        assert(type(n) == "number")
+
+        local len_context = len_offset   -- length of context that we looked at so far
+        local delims_matched = 0         -- number of the limiters that were matched so far
+        local idx = 0                    -- corresponding index in the context_table (will differ from len_context when going backwards)
+        while delims_matched < n do
+            if #context_table <= len_context then expand_content() end
+            if direction_backward then
+                idx = #context_table - len_context
+            else
+                idx = len_context
+            end
+            local ch = context_table[idx]
+            assert(ch ~= nil, ("Something went wrong when parsing previous context! idx: %d, context_table size: %d"):format(idx, #context_table))
+            if delim[ch] then
+                delims_matched = delims_matched + 1
+            end
+            len_context = len_context + 1
+        end
+        return len_context
+    end
+
+    local delims_map_sentence = u.to_set(util.splitToChars(self.conf.fragment_delimiters:get_value()))
+    local delims_map_part_of_sentence = u.to_set(util.splitToChars(self.conf.part_of_sentence_delimiters:get_value()))
     local whitespace_map = u.to_set(util.splitToChars(" 　〿\t\n"))
     -- the trailing delimiter will not be included, except it is one of these
     local retain_trailing_delims = u.to_set(util.splitToChars(self.conf.retained_trailing_delimiters:get_value()))
 
+    local len_ctx_prev = 0
+
     -- calculate the slice of the `prev_context_table` array that should be prepended to the lookupword
-    local prev_idx, prev_s_idx = 0, 0
-    while prev_s_idx < pre_s do
-        if #self.prev_context_table <= prev_idx then expand_content() end
-        local idx = #self.prev_context_table - prev_idx
-        local ch = self.prev_context_table[idx]
-        assert(ch ~= nil, ("Something went wrong when parsing previous context! idx: %d, context_table size: %d"):format(idx, #self.prev_context_table))
-        if delims_map[ch] then
-            prev_s_idx = prev_s_idx + 1
-        end
-        prev_idx = prev_idx + 1
+    len_ctx_prev = my_func(self.prev_context_table, len_ctx_prev, delims_map_sentence, pre_s, true)  -- sentences
+    len_ctx_prev = my_func(self.prev_context_table, len_ctx_prev, delims_map_part_of_sentence, pre_p, true)  -- parts of sentence
+    if len_ctx_prev > 0 then
+        -- do not include the trailing character belonging to the preceding sentence / part of sentence
+        len_ctx_prev = len_ctx_prev - 1
     end
-    if prev_idx > 0 then
-        -- do not include the trailing character (if we parsed any sentences above)
-        prev_idx = prev_idx - 1
-    end
-    while prev_idx > 0 do
-        -- remove prepending whitespace, going from left to right
-        local idx = #self.prev_context_table - (prev_idx - 1)
+    len_ctx_prev = len_ctx_prev + pre_c   -- apply context offset for characters
+    while len_ctx_prev > 0 do
+        -- remove preceding whitespace, going from left to right
+        -- TODO: extract to function, for example trim_whitespace() (both pre and next)
+        local idx = #self.prev_context_table - (len_ctx_prev - 1)
         local ch = self.prev_context_table[idx]
         if whitespace_map[ch] then
-            prev_idx = prev_idx - 1
+            len_ctx_prev = len_ctx_prev - 1
         else
             break
         end
     end
-    -- determine preceding context content
-    prev_idx = prev_idx + pre_c
-    if #self.prev_context_table <= prev_idx then expand_content() end
-    local i, j = #self.prev_context_table - prev_idx + 1, #self.prev_context_table
+    
+    -- determine preceding context
+    if #self.prev_context_table <= len_ctx_prev then expand_content() end
+    local i, j = #self.prev_context_table - len_ctx_prev + 1, #self.prev_context_table
     local prepended_content = table.concat(self.prev_context_table, "", i, j)
 
     -- calculate the slice of the `next_context_table` array that should be appended to the lookupword
-    -- `next_idx` starts at 1 because that's the first index in the table
-    local next_idx, next_s_idx = 1, 0
-    while next_s_idx < post_s do
-        if next_idx > #self.next_context_table then expand_content() end
-        local ch = self.next_context_table[next_idx]
-        assert(ch ~= nil, ("Something went wrong when parsing next context! idx: %d, context_table size: %d"):format(next_idx, #self.next_context_table))
-        if delims_map[ch] then
-            next_s_idx = next_s_idx + 1
-        end
-        next_idx = next_idx + 1
-    end
+    -- `len_ctx_next` starts at 1 because that's the first index in the table
+    local len_ctx_next = 1
+    len_ctx_next = my_func(self.next_context_table, len_ctx_next, delims_map_sentence, post_s, false)  -- sentences
+    len_ctx_next = my_func(self.next_context_table, len_ctx_next, delims_map_part_of_sentence, post_p, false)  -- parts of sentence
+    -- while next_s_idx < post_s do
+    --     if len_ctx_next > #self.next_context_table then expand_content() end
+    --     local ch = self.next_context_table[len_ctx_next]
+    --     assert(ch ~= nil, ("Something went wrong when parsing next context! idx: %d, context_table size: %d"):format(len_ctx_next, #self.next_context_table))
+    --     if delims_map_sentence[ch] then
+    --         next_s_idx = next_s_idx + 1
+    --     end
+    --     len_ctx_next = len_ctx_next + 1
+    -- end
     -- do not include the trailing character
-    next_idx = next_idx - 1
-    if next_idx > 0 then
+    len_ctx_next = len_ctx_next - 1
+    if len_ctx_next > 0 then
         -- do not include trailing delimiter, except it is one of these
-        local ch = self.next_context_table[next_idx]
+        local ch = self.next_context_table[len_ctx_next]
         if not retain_trailing_delims[ch] then
-            next_idx = next_idx - 1
+            len_ctx_next = len_ctx_next - 1
         end
     end
     -- determine appended context content
-    next_idx = next_idx + post_c
-    if next_idx > #self.next_context_table then expand_content() end
-    local appended_content = table.concat(self.next_context_table, "", 1, next_idx)
+    len_ctx_next = len_ctx_next + post_c
+    if len_ctx_next > #self.next_context_table then expand_content() end
+    local appended_content = table.concat(self.next_context_table, "", 1, len_ctx_next)
     -- These 2 variables can be used to detect if any content was prepended / appended
-    self.has_prepended_content = prev_idx > 0
-    self.has_appended_content = next_idx > 0
+    self.has_prepended_content = len_ctx_prev > 0
+    self.has_appended_content = len_ctx_next > 0
     return prepended_content, appended_content
 end
 
