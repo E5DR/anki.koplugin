@@ -35,8 +35,10 @@ local Config = {
     always_open_custom_context = true,
     -- How many chars holding the ±1 buttons will jump inside the custom context window
     custom_context_jump_size = 8,
-    -- Punctuation that is used to split sentences / sentence fragments (    buttons, also determines default context)
-    fragment_delimiters = "「」『』（）【】、。！？().?!,\"'",
+    -- Punctuation that is used to split sentences (holding the << and >> buttons)
+    sentence_delimiters = "「」『』（）【】。！？().?!\"'",
+    -- Punctuation that is used to split parts of a sentence (<< and >> buttons)
+    part_of_sentence_delimiters = "「」『』（）【】、。！？().?!,\"'",
     -- Which trailing delimiters should be retained at the end of the context
     retained_trailing_delimiters = "、。！？.?!,",
 

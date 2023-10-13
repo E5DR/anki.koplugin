@@ -67,10 +67,17 @@ local menu_entries = {
         conf_type = "bool",
     },
     {
-        id = "fragment_delimiters",
+        id = "part_of_sentence_delimiters",
         group = custom_context_settings,
-        name = "Fragment delimiters",
-        description = "Punctuation that is used to split sentence fragments (    buttons)",
+        name = "Part-of-sentence delimiters",
+        description = "Punctuation that is used to split parts of a sentence.\n(    buttons)",
+        conf_type = "text",
+    },
+    {
+        id = "sentence_delimiters",
+        group = custom_context_settings,
+        name = "Sentence delimiters",
+        description = "Punctuation that is used to split sentences.\n(holding the     buttons)",
         conf_type = "text",
     },
     {
