@@ -120,7 +120,7 @@ function AnkiWidget:init()
     DictQuickLookup.tweak_buttons_func = function(popup_dict, buttons)
         local btn_text = "Add to Anki"
         if self.user_config.always_open_custom_context:get_value() then
-            btn_text = "Add to Anki with context"
+            btn_text = "Add to Anki (select context)"
         end
         self.add_to_anki_btn = {
             id = "add_to_anki",
