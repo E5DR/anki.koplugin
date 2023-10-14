@@ -81,12 +81,45 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
     
     local DIRECTION_NEXT = 0
     local DIRECTION_PREV = 1
+    --[[
+    -- Returns the n-th char of the context in direction `direction`
+    -- @param n: which char to return, counted from one (so the first char is char 1)
+    -- @param direction: DIRECTION_PREV for the previous context, DIRECTION_NEXT for the next context.
+    -- For DIRECTION_PREV n is applied backward (towards the left)
+    --]]
+    local function get_context_at_char(n, direction)
+        --                backwards     forwards  
+        -- idx:           ---->x        -->x      
+        --                cccccccccwwwwwcccccccccc
+        -- n:                  x<--     -->x      
+
+        assert(type(n) == "number")
+        assert(n >= 1)
+        local idx -- corresponding index in the context_table (differs from n when going backwards)
+        local ch
+        if direction == DIRECTION_PREV then
+            if #self.prev_context_table < n then expand_content() end
+            idx = #self.prev_context_table - (n - 1) -- one-indexing is not applicable when accessing backwards
+            ch = self.prev_context_table[idx]
+            logger.info("AnkiNote#get_context_at_char() - n", n, "ch", ch, "idx", idx)
+            assert(ch ~= nil, ("Something went wrong when parsing context! idx: %d, context size: %d"):format(idx, #self.prev_context_table))
+        else
+            if #self.next_context_table < n then expand_content() end
+            idx = n  -- in context characters are counted from one and the same goes for lua tables, everything is fine
+            ch = self.next_context_table[idx]
+            logger.info("AnkiNote#get_context_at_char() - n", n, "ch", ch, "idx", idx)
+            assert(ch ~= nil, ("Something went wrong when parsing context! idx: %d, context size: %d"):format(idx, #self.next_context_table))
+        end
+        assert(ch ~= nil, ("Something went wrong when parsing context!"))
+        return ch
+    end
 
     --[[
     -- Returns the length of the context until the n-th delimiter.
+    -- A length of 0 means "no context", 1 is "one character of context" and so forth.
     -- @param len_offset: Offset for the start of the search (for example obtained from a previous call
     -- to this function). It is applied in the direction of the search and included in the returned value
-    -- (that is, the returned value is absolute, not relative).
+    -- (that is, the returned value is absolute, not relative). Like the return value, this is counted from 1
     -- @param delim: A set with the delimiters that should be searched for
     -- @param n: We want to look for the n-th occurance of delim. Can be negative (useful in combination
     -- with len_offset)
@@ -96,29 +129,14 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
     --]]
     local function calculate_context_length(len_offset, delim, n, direction)
 
-        --                backwards     forwards  
-        -- idx:           ---->x        -->x      
-        --                cccccccccwwwwwcccccccccc
-        -- len_context:        x<--     -->x      
-
         logger.info("AnkiNote#calculate_context_length() - len_offset", len_offset, "n", n, "direction_prev", direction)
 
         assert(type(len_offset) == "number")
-        assert(len_offset >= 0)
+        assert(len_offset >= 1)
         assert(type(n) == "number")
         
-        local context_table = {}  -- Wrap context tables so can we easily use the one we actually need. Note: you need to reassign this after expanding the content, or they will still be pointing to the old tables
-        context_table[DIRECTION_PREV] = self.prev_context_table
-        context_table[DIRECTION_NEXT] = self.next_context_table
         local len_context = len_offset  -- length of context that we looked at so far (absolute)
-        if len_context == 0 and direction == DIRECTION_NEXT then
-            len_context = 1 -- start at 1 since lua starts counting at 1
-            -- NOTE: I am not happy with the way this works right now.
-            -- Both previous and next should share the same meaning of what a length of 0 means.
-            -- Does a value of 0 mean "the first char of the context", or "no context"?
-        end
         local delims_matched = 0         -- number of the limiters that were matched so far
-        local idx = 0                    -- corresponding index in the context_table (differs from len_context when going backwards)
         local len_incr = 1               -- whether we move forward or backward through the context table
         if n < 0 then
             -- for negative n we aim to reduce len_context by n delimiters (not increase)
@@ -127,20 +145,7 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
         local is_first_char = true
 
         while delims_matched < math.abs(n) do
-            if #context_table[direction] <= len_context then
-                expand_content()
-                -- reassign context_table so that it points to the new expanded tables
-                context_table[DIRECTION_PREV] = self.prev_context_table
-                context_table[DIRECTION_NEXT] = self.next_context_table
-            end
-            if direction == DIRECTION_PREV then
-                idx = #context_table[direction] - len_context
-            else
-                idx = len_context
-            end
-            local ch = context_table[direction][idx]
-            logger.info("AnkiNote#calculate_context_length() - len_context", len_context, "ch", ch, "idx", idx)
-            assert(ch ~= nil, ("Something went wrong when parsing context! idx: %d, context size: %d"):format(idx, #context_table[direction]))
+            local ch = get_context_at_char(len_context, direction)
             if delim[ch] then
                 if (len_offset > 1 and is_first_char) then
                     --  ensure we do not count the same delimiter on which we stopped during a previous call
@@ -174,7 +179,7 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
     local retain_trailing_delims = u.to_set(util.splitToChars(self.conf.retained_trailing_delimiters:get_value()))
 
     -- calculate the slice of the `prev_context_table` array that should be prepended to the lookupword
-    local len_ctx_prev = 0
+    local len_ctx_prev = 1 -- context characters are counted from one
     len_ctx_prev = calculate_context_length(len_ctx_prev, delims_map_sentence, pre_s, DIRECTION_PREV)  -- sentences
     len_ctx_prev = calculate_context_length(len_ctx_prev, delims_map_part_of_sentence, pre_p, DIRECTION_PREV)  -- parts of sentence
     logger.info("AnkiNote#get_custom_context() - len_ctx_prev", len_ctx_prev)
@@ -194,11 +199,11 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
     logger.info("AnkiNote#get_custom_context() - len_ctx_prev", len_ctx_prev)
     -- determine preceding context
     if #self.prev_context_table <= len_ctx_prev then expand_content() end
-    local i, j = #self.prev_context_table - len_ctx_prev + 1, #self.prev_context_table
+    local i, j = #self.prev_context_table - (len_ctx_prev - 1) + 1, #self.prev_context_table
     local prepended_content = table.concat(self.prev_context_table, "", i, j)
 
     -- calculate the slice of the `next_context_table` array that should be appended to the lookupword
-    local len_ctx_next = 0
+    local len_ctx_next = 1 -- context characters are counted from one
     len_ctx_next = calculate_context_length(len_ctx_next, delims_map_sentence, post_s, DIRECTION_NEXT)  -- sentences
     len_ctx_next = calculate_context_length(len_ctx_next, delims_map_part_of_sentence, post_p, DIRECTION_NEXT)  -- parts of sentence
     logger.info("AnkiNote#get_custom_context() - len_ctx_next", len_ctx_next)
@@ -216,8 +221,8 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
     if len_ctx_next > #self.next_context_table then expand_content() end
     local appended_content = table.concat(self.next_context_table, "", 1, len_ctx_next)
     -- These 2 variables can be used to detect if any content was prepended / appended
-    self.has_prepended_content = len_ctx_prev > 0
-    self.has_appended_content = len_ctx_next > 0
+    self.has_prepended_content = len_ctx_prev > 1
+    self.has_appended_content = len_ctx_next > 1
     return prepended_content, appended_content
 end
 
