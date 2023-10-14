@@ -81,7 +81,8 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
     --[[
     -- Returns the length of the string until the n-th delimiter in search direction.
     -- @param context_table: The table to be searched
-    -- @param n: We want to look for the n-th occurance of delim
+    -- @param n: We want to look for the n-th occurance of delim. Can be negative (useful in combination
+    -- with len_offset)
     -- @param delim: A set with the the limites that should be searched for
     -- @param direction_backward: If this is true, the search will be carried out leftward starting
     -- at the end.
@@ -95,14 +96,25 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
         --                cccccccccwwwwwcccccccccc
         -- len_context:        x<--     -->x      
 
+        logger.info("AnkiNote#my_func() - len_offset", len_offset, "n", n, "backward", direction_backward)
+
         assert(type(len_offset) == "number")
         assert(len_offset >= 0)
         assert(type(n) == "number")
-
-        local len_context = len_offset   -- length of context that we looked at so far
+        
+        local len_context = len_offset  -- length of context that we looked at so far
         local delims_matched = 0         -- number of the limiters that were matched so far
-        local idx = 0                    -- corresponding index in the context_table (will differ from len_context when going backwards)
-        while delims_matched < n do
+        local idx = 0                    -- corresponding index in the context_table (differs from len_context when going backwards)
+        local len_incr = 1
+        if n < 0 then
+            -- for negative n we aim to reduce len_context by n delimiters (not increase)
+            len_incr = -1
+        end
+        while delims_matched < math.abs(n) do
+            -- len_context is incremented at the top for two reasons:
+            -- * to ensure we do not hit the same delimiters on which we stopped during a previous call (relevant when len_offset>0)
+            -- * to avoid incrementing beyond the delimiter we find during this call
+            len_context = math.max(0, len_context + len_incr)
             if #context_table <= len_context then expand_content() end
             if direction_backward then
                 idx = #context_table - len_context
@@ -110,11 +122,17 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
                 idx = len_context
             end
             local ch = context_table[idx]
+            logger.info("AnkiNote#my_func() - len_context", len_context, "ch", ch, "idx", idx)
             assert(ch ~= nil, ("Something went wrong when parsing previous context! idx: %d, context_table size: %d"):format(idx, #context_table))
             if delim[ch] then
                 delims_matched = delims_matched + 1
+                logger.info("AnkiNote#my_func() - delimiter matched", delims_matched)
             end
-            len_context = len_context + 1
+            if len_incr < 0 and len_context == 0 then
+                -- we went backwards and reached the start of the context
+                -- stop here since nothing more is left to do (otherwise the function will be stuck in an endless loop)
+                break
+            end
         end
         return len_context
     end
@@ -122,19 +140,15 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
     local delims_map_sentence = u.to_set(util.splitToChars(self.conf.fragment_delimiters:get_value()))
     local delims_map_part_of_sentence = u.to_set(util.splitToChars(self.conf.part_of_sentence_delimiters:get_value()))
     local whitespace_map = u.to_set(util.splitToChars(" 　〿\t\n"))
-    -- the trailing delimiter will not be included, except it is one of these
     local retain_trailing_delims = u.to_set(util.splitToChars(self.conf.retained_trailing_delimiters:get_value()))
 
-    local len_ctx_prev = 0
-
     -- calculate the slice of the `prev_context_table` array that should be prepended to the lookupword
+    local len_ctx_prev = 0
     len_ctx_prev = my_func(self.prev_context_table, len_ctx_prev, delims_map_sentence, pre_s, true)  -- sentences
     len_ctx_prev = my_func(self.prev_context_table, len_ctx_prev, delims_map_part_of_sentence, pre_p, true)  -- parts of sentence
-    if len_ctx_prev > 0 then
-        -- do not include the trailing character belonging to the preceding sentence / part of sentence
-        len_ctx_prev = len_ctx_prev - 1
-    end
+    logger.info("AnkiNote#get_custom_context() - len_ctx_prev", len_ctx_prev)
     len_ctx_prev = len_ctx_prev + pre_c   -- apply context offset for characters
+    logger.info("AnkiNote#get_custom_context() - len_ctx_prev", len_ctx_prev)
     while len_ctx_prev > 0 do
         -- remove preceding whitespace, going from left to right
         -- TODO: extract to function, for example trim_whitespace() (both pre and next)
@@ -146,28 +160,17 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
             break
         end
     end
-    
+    logger.info("AnkiNote#get_custom_context() - len_ctx_prev", len_ctx_prev)
     -- determine preceding context
     if #self.prev_context_table <= len_ctx_prev then expand_content() end
     local i, j = #self.prev_context_table - len_ctx_prev + 1, #self.prev_context_table
     local prepended_content = table.concat(self.prev_context_table, "", i, j)
 
     -- calculate the slice of the `next_context_table` array that should be appended to the lookupword
-    -- `len_ctx_next` starts at 1 because that's the first index in the table
-    local len_ctx_next = 1
+    local len_ctx_next = 1 -- starts at 1 because that's the first index in the table
     len_ctx_next = my_func(self.next_context_table, len_ctx_next, delims_map_sentence, post_s, false)  -- sentences
     len_ctx_next = my_func(self.next_context_table, len_ctx_next, delims_map_part_of_sentence, post_p, false)  -- parts of sentence
-    -- while next_s_idx < post_s do
-    --     if len_ctx_next > #self.next_context_table then expand_content() end
-    --     local ch = self.next_context_table[len_ctx_next]
-    --     assert(ch ~= nil, ("Something went wrong when parsing next context! idx: %d, context_table size: %d"):format(len_ctx_next, #self.next_context_table))
-    --     if delims_map_sentence[ch] then
-    --         next_s_idx = next_s_idx + 1
-    --     end
-    --     len_ctx_next = len_ctx_next + 1
-    -- end
-    -- do not include the trailing character
-    len_ctx_next = len_ctx_next - 1
+    logger.info("AnkiNote#get_custom_context() - len_ctx_next", len_ctx_next)
     if len_ctx_next > 0 then
         -- do not include trailing delimiter, except it is one of these
         local ch = self.next_context_table[len_ctx_next]
@@ -175,8 +178,10 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
             len_ctx_next = len_ctx_next - 1
         end
     end
+    logger.info("AnkiNote#get_custom_context() - len_ctx_next", len_ctx_next)
     -- determine appended context content
     len_ctx_next = len_ctx_next + post_c
+    logger.info("AnkiNote#get_custom_context() - len_ctx_next", len_ctx_next)
     if len_ctx_next > #self.next_context_table then expand_content() end
     local appended_content = table.concat(self.next_context_table, "", 1, len_ctx_next)
     -- These 2 variables can be used to detect if any content was prepended / appended
