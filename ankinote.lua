@@ -79,30 +79,38 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
         self:init_context_buffer(self.context_size)
     end
     --[[
-    -- Returns the length of the string until the n-th delimiter in search direction.
-    -- @param context_table: The table to be searched
+    -- Returns the length of the context until the n-th delimiter.
+    -- @param len_offset: Offset for the start of the search (for example obtained from a previous call
+    -- to this function). It is applied in the direction of the search and included in the returned value
+    -- (that is, the returned value is absolute, not relative).
+    -- @param delim: A set with the the limits that should be searched for
     -- @param n: We want to look for the n-th occurance of delim. Can be negative (useful in combination
     -- with len_offset)
-    -- @param delim: A set with the the limites that should be searched for
-    -- @param direction_backward: If this is true, the search will be carried out leftward starting
+    -- @param direction_pre: If this is true, the search will be carried out in the previous context,
+    -- otherwise the next context. Since the context length is counted beginnin from the matched word,
+    -- the search is conducted backward (towards the left) if this is true.
     -- at the end.
-    -- @param len_offset: Offset for the start of the search. It is applied in the direction of the
-    -- search and included in the returned value (that is, the returned value is absolute, not relative).
     --]]
-    local function my_func(context_table, len_offset, delim, n, direction_backward)
+    local function my_func(len_offset, delim, n, direction_pre)
 
         --                backwards     forwards  
         -- idx:           ---->x        -->x      
         --                cccccccccwwwwwcccccccccc
         -- len_context:        x<--     -->x      
 
-        logger.info("AnkiNote#my_func() - len_offset", len_offset, "n", n, "backward", direction_backward)
+        logger.info("AnkiNote#my_func() - len_offset", len_offset, "n", n, "direction_pre", direction_pre)
 
         assert(type(len_offset) == "number")
         assert(len_offset >= 0)
         assert(type(n) == "number")
         
-        local len_context = len_offset  -- length of context that we looked at so far
+        local context_table = {}  -- using a bool so we can directly index with direction_pre
+        context_table[true] = self.prev_context_table
+        context_table[false] = self.next_context_table
+        local len_context = len_offset  -- length of context that we looked at so far (absolute)
+        if len_context == 0 and not direction_pre then
+            len_context = 1 -- start at 1 because that's the first index in the table
+        end
         local delims_matched = 0         -- number of the limiters that were matched so far
         local idx = 0                    -- corresponding index in the context_table (differs from len_context when going backwards)
         local len_incr = 1
@@ -110,25 +118,44 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
             -- for negative n we aim to reduce len_context by n delimiters (not increase)
             len_incr = -1
         end
+        local is_first_char = true
+
         while delims_matched < math.abs(n) do
-            -- len_context is incremented at the top for two reasons:
-            -- * to ensure we do not hit the same delimiters on which we stopped during a previous call (relevant when len_offset>0)
-            -- * to avoid incrementing beyond the delimiter we find during this call
-            len_context = math.max(0, len_context + len_incr)
-            if #context_table <= len_context then expand_content() end
-            if direction_backward then
-                idx = #context_table - len_context
+            if #context_table[direction_pre] <= len_context then
+                expand_content()
+                -- reassign context_table so that it points to the new expanded tables
+                -- TODO: change to string-based (direction_prev,direction_next)
+                context_table[true] = self.prev_context_table
+                context_table[false] = self.next_context_table
+            end
+            if direction_pre then
+                idx = #context_table[direction_pre] - len_context
             else
                 idx = len_context
             end
-            local ch = context_table[idx]
+            local ch = context_table[direction_pre][idx]
             logger.info("AnkiNote#my_func() - len_context", len_context, "ch", ch, "idx", idx)
-            assert(ch ~= nil, ("Something went wrong when parsing previous context! idx: %d, context_table size: %d"):format(idx, #context_table))
+            assert(ch ~= nil, ("Something went wrong when parsing context! idx: %d, context size: %d"):format(idx, #context_table[direction_pre]))
             if delim[ch] then
-                delims_matched = delims_matched + 1
-                logger.info("AnkiNote#my_func() - delimiter matched", delims_matched)
+                if (len_offset > 1 and is_first_char) then
+                    --  ensure we do not count the same delimiter on which we stopped during a previous call
+                    --  Note that since the matched word might be the first or last one in a sentence / -part,
+                    --  we still want to count a delimiter if it is the very first character
+                    logger.info("AnkiNote#my_func() - delimiter matched", delims_matched, "ignoring since we matched that last time")
+                else
+                    delims_matched = delims_matched + 1
+                    logger.info("AnkiNote#my_func() - delimiter matched, count:", delims_matched)
+                    if delims_matched >= math.abs(n) then
+                        -- note: this makes while loop condition redundant
+                        -- break here to avoid incrementing beyond the delimiter we find during this call
+                        break
+                    end
+                end
             end
-            if len_incr < 0 and len_context == 0 then
+            -- * To avoid incrementing beyond the delimiter we find during this call
+            len_context = math.max(0, len_context + len_incr)
+            is_first_char = false
+            if len_incr < 0 and len_context <= 1 then
                 -- we went backwards and reached the start of the context
                 -- stop here since nothing more is left to do (otherwise the function will be stuck in an endless loop)
                 break
@@ -144,8 +171,8 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
 
     -- calculate the slice of the `prev_context_table` array that should be prepended to the lookupword
     local len_ctx_prev = 0
-    len_ctx_prev = my_func(self.prev_context_table, len_ctx_prev, delims_map_sentence, pre_s, true)  -- sentences
-    len_ctx_prev = my_func(self.prev_context_table, len_ctx_prev, delims_map_part_of_sentence, pre_p, true)  -- parts of sentence
+    len_ctx_prev = my_func(len_ctx_prev, delims_map_sentence, pre_s, true)  -- sentences
+    len_ctx_prev = my_func(len_ctx_prev, delims_map_part_of_sentence, pre_p, true)  -- parts of sentence
     logger.info("AnkiNote#get_custom_context() - len_ctx_prev", len_ctx_prev)
     len_ctx_prev = len_ctx_prev + pre_c   -- apply context offset for characters
     logger.info("AnkiNote#get_custom_context() - len_ctx_prev", len_ctx_prev)
@@ -167,9 +194,9 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
     local prepended_content = table.concat(self.prev_context_table, "", i, j)
 
     -- calculate the slice of the `next_context_table` array that should be appended to the lookupword
-    local len_ctx_next = 1 -- starts at 1 because that's the first index in the table
-    len_ctx_next = my_func(self.next_context_table, len_ctx_next, delims_map_sentence, post_s, false)  -- sentences
-    len_ctx_next = my_func(self.next_context_table, len_ctx_next, delims_map_part_of_sentence, post_p, false)  -- parts of sentence
+    local len_ctx_next = 0
+    len_ctx_next = my_func(len_ctx_next, delims_map_sentence, post_s, false)  -- sentences
+    len_ctx_next = my_func(len_ctx_next, delims_map_part_of_sentence, post_p, false)  -- parts of sentence
     logger.info("AnkiNote#get_custom_context() - len_ctx_next", len_ctx_next)
     if len_ctx_next > 0 then
         -- do not include trailing delimiter, except it is one of these
