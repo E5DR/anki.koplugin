@@ -257,14 +257,24 @@ function CustomContextMenu:reset()
 end
 
 function CustomContextMenu:reset_prev()
-    self.prev_s_cnt = 1
-    self.prev_p_cnt = 0
+    if self.opts.conf.default_context_is_sentence_part:get_value() then
+        self.prev_s_cnt = 0
+        self.prev_p_cnt = 1
+    else
+        self.prev_s_cnt = 1
+        self.prev_p_cnt = 0
+    end
     self.prev_c_cnt = 0
 end
 
 function CustomContextMenu:reset_next()
-    self.next_s_cnt = 1
-    self.next_p_cnt = 0
+    if self.opts.conf.default_context_is_sentence_part:get_value() then
+        self.next_s_cnt = 0
+        self.next_p_cnt = 1
+    else
+        self.next_s_cnt = 1
+        self.next_p_cnt = 0
+    end
     self.next_c_cnt = 0
 end
 

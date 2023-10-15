@@ -33,6 +33,8 @@ local Config = {
     -- Otherwise, pressing this button will immediately create a new card with the default context.
     -- Note: I don't know why, but if you set this to true, the corresponding menu item will remain stuck activated
     always_open_custom_context = true,
+    -- Set the default context to be the current part of the sentence (between commas), instead of the whole sentence.
+    default_context_is_sentence_part = false,
     -- How many chars holding the ±1 buttons will jump inside the custom context window
     custom_context_jump_size = 8,
     -- Punctuation that is used to split sentences (holding the << and >> buttons)

@@ -67,6 +67,13 @@ local menu_entries = {
         conf_type = "bool",
     },
     {
+        id = "default_context_is_sentence_part",
+        group = custom_context_settings,
+        name = "Use part-of-sentence as default context",
+        description = "Set the default context to be the current part of the sentence (between commas), instead of the whole sentence.",
+        conf_type = "bool",
+    },
+    {
         id = "part_of_sentence_delimiters",
         group = custom_context_settings,
         name = "Part-of-sentence delimiters",
