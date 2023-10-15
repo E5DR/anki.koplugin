@@ -75,12 +75,14 @@ function AnkiNote:expand_content()
 end
 
 --[[
--- Returns the n-th char of the context in the specified direction.
+-- Returns the n-th char of the specified context.
 -- Applies safety checks and automatically expands the context table if necessary.
--- @param n: Which char to return, counted from the lookupword, starting at one (so the first char is char 1).
--- @param direction: Either CONTEXT_PREV or CONTEXT_NEXT. For CONTEXT_PREV n is applied backward (towards the left).
+-- @param n: Which char to return, counted starting from the lookupword, beginning
+-- at one (so the first char is char 1).
+-- @param which_context: Either CONTEXT_PREV or CONTEXT_NEXT. For CONTEXT_PREV n is
+-- applied backward (towards the left).
 --]]
-function AnkiNote:get_context_at_char(n, direction)
+function AnkiNote:get_context_at_char(n, which_context)
     --                backwards     forwards  
     -- idx:           ---->x        -->x      
     --                cccccccccwwwwwcccccccccc
@@ -91,33 +93,33 @@ function AnkiNote:get_context_at_char(n, direction)
     assert(n >= 1)
     local idx -- corresponding index in the context_table (differs from n when going backwards)
     local ch
-    if #self.context_table[direction] < n then self:expand_content() end
-    if direction == CONTEXT_PREV then
-        idx = #self.context_table[direction] - (n - 1) -- one-indexing is not applicable when accessing backwards
+    if #self.context_table[which_context] < n then self:expand_content() end
+    if which_context == CONTEXT_PREV then
+        idx = #self.context_table[which_context] - (n - 1) -- one-indexing is not applicable when accessing backwards
     else
         idx = n  -- in context characters are counted from one and the same goes for lua tables, everything is fine
     end
-    ch = self.context_table[direction][idx]
+    ch = self.context_table[which_context][idx]
     logger.info("AnkiNote#get_context_at_char() - n", n, "ch", ch, "idx", idx)
-    assert(ch ~= nil, ("Something went wrong when parsing context! idx: %d, context size: %d"):format(idx, #self.context_table[direction]))
+    assert(ch ~= nil, ("Something went wrong when parsing context! idx: %d, context size: %d"):format(idx, #self.context_table[which_context]))
     return ch
 end
 
 --[[
--- Returns the n chars of the context in the specified
--- @param n: Size of context to get, counted from the lookupword, starting at one (so the
--- first char is char 1). A value of 0 returns an empty table.
+-- Returns the n chars of the specified context.
+-- @param n: Size of context to get, counted starting from the lookupword, beginning
+-- at one (so the first char is char 1). A value of 0 returns an empty table.
 -- @param offset: Offset for starting position (optional)
--- @param direction: Either CONTEXT_PREV or CONTEXT_NEXT. For CONTEXT_PREV n is applied
--- backward (towards the left)
+-- @param which_context: Either CONTEXT_PREV or CONTEXT_NEXT. For CONTEXT_PREV n is
+-- applied backward (towards the left).
 --]]
-function AnkiNote:get_context_of_length(n, direction, offset)
+function AnkiNote:get_context_of_length(n, which_context, offset)
     --                backwards     forwards  
     -- idx:           ---->x        -->x      
     --                cccccccccwwwwwcccccccccc
     -- n:                  x<--     -->x      
 
-    logger.info("AnkiNote#get_context_of_length() - n", n, "direction", direction, "offset", offset)
+    logger.info("AnkiNote#get_context_of_length() - n", n, "direction", which_context, "offset", offset)
     assert(type(n) == "number")
     assert(n >= 0)
     local offset_
@@ -125,20 +127,20 @@ function AnkiNote:get_context_of_length(n, direction, offset)
         offset_ = 0
     end
     local start, stop -- both start and stop are inclusive
-    if #self.context_table[direction] < n + offset_ then self:expand_content() end
-    if direction == CONTEXT_NEXT then
+    if #self.context_table[which_context] < n + offset_ then self:expand_content() end
+    if which_context == CONTEXT_NEXT then
         start = 1
         stop = n
     else
-        start = #self.context_table[direction] - (n - 1)
-        stop = #self.context_table[direction]
+        start = #self.context_table[which_context] - (n - 1)
+        stop = #self.context_table[which_context]
     end
     start = start + offset_
     stop = stop + offset_
-    local content = table.concat(self.context_table[direction], "", start, stop)
+    local content = table.concat(self.context_table[which_context], "", start, stop)
     logger.info(string.format("AnkiNote#get_context_of_length() - start %d, stop %d, content '%s'", start, stop, content))
     -- since Japanese characters are multi byte, it is expected that #content > n
-    -- TODO: fill the table in a way that every index contains exactly one character so #content > n
+    -- TODO: fill the table in a way that every index contains exactly one character so #content == n
     -- TODO: decide: is this function supposed to return a table of characters or a string?
     assert(#content >= n, string.format("Something went wrong when retrieving context! n: %d, context size: %d", n, #content))
     return content
@@ -153,15 +155,15 @@ end
 -- @param delim: A set with the delimiters that should be searched for
 -- @param n: We want to look for the n-th occurance of delim. Can be negative (useful in combination
 -- with len_offset)
--- @param direction: Either CONTEXT_PREV or CONTEXT_NEXT. Since the context length is counted beginning
+-- @param which_context: Either CONTEXT_PREV or CONTEXT_NEXT. Since the context length is counted beginning
 -- from the matched word, the search is conducted backward (towards the left) in case of CONTEXT_PREV.
 --]]
-function AnkiNote:calculate_context_length(len_offset, delim, n, direction)
+function AnkiNote:calculate_context_length(len_offset, delim, n, which_context)
 
-    logger.info("AnkiNote#calculate_context_length() - len_offset", len_offset, "n", n, "direction_prev", direction)
+    logger.info("AnkiNote#calculate_context_length() - len_offset", len_offset, "n", n, "direction_prev", which_context)
 
     assert(type(len_offset) == "number")
-    assert(len_offset >= 1)
+    assert(len_offset >= 0)
     assert(type(n) == "number")
     
     local len_context = len_offset  -- length of context that we looked at so far (absolute)
@@ -174,7 +176,9 @@ function AnkiNote:calculate_context_length(len_offset, delim, n, direction)
     local is_first_char = true
 
     while delims_matched < math.abs(n) do
-        local ch = self:get_context_at_char(len_context, direction)
+        local next_index = math.max(1, len_context + len_incr)
+        local last_ch
+        local ch = self:get_context_at_char(next_index, which_context)
         if delim[ch] then
             if (len_offset > 1 and is_first_char) then
                 --  ensure we do not count the same delimiter on which we stopped during a previous call
@@ -184,15 +188,14 @@ function AnkiNote:calculate_context_length(len_offset, delim, n, direction)
             else
                 delims_matched = delims_matched + 1
                 logger.info("AnkiNote#calculate_context_length() - delimiter matched, count:", delims_matched)
-                if delims_matched >= math.abs(n) then
-                    -- note: this makes while loop condition redundant
-                    -- break here to avoid incrementing beyond the delimiter we find during this call
-                    break
-                end
+                -- if which_context == CONTEXT_NEXT and retain_trailing_delims[ch] then
+                --    break -- do not count the delimiter
+                -- end
             end
         end
-        len_context = math.max(0, len_context + len_incr)
+        len_context = next_index
         is_first_char = false
+        last_ch = ch
         if len_incr < 0 and len_context <= 1 then
             -- we went backwards and reached the start of the context
             -- stop here since nothing more is left to do (otherwise the function will be stuck in an endless loop)
@@ -221,7 +224,7 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
     local retain_trailing_delims = u.to_set(util.splitToChars(self.conf.retained_trailing_delimiters:get_value()))
 
     -- calculate the length of the context that should be prepended to the lookupword
-    local len_ctx_prev = 1 -- context characters are counted from one TODO: we should start at 0 chars (no context)
+    local len_ctx_prev = 0
     len_ctx_prev = self:calculate_context_length(len_ctx_prev, delims_map_sentence, pre_s, CONTEXT_PREV)  -- sentences
     len_ctx_prev = self:calculate_context_length(len_ctx_prev, delims_map_part_of_sentence, pre_p, CONTEXT_PREV)  -- parts of sentence
     logger.info("AnkiNote#get_custom_context() - len_ctx_prev", len_ctx_prev)
@@ -245,11 +248,12 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
     local prepended_content = self:get_context_of_length(len_ctx_prev, CONTEXT_PREV)
 
     -- calculate the length of the context that should be appended to the lookupword
-    local len_ctx_next = 1 -- context characters are counted from one TODO: we should start at 0 chars (no context)
+    local len_ctx_next = 0
     len_ctx_next = self:calculate_context_length(len_ctx_next, delims_map_sentence, post_s, CONTEXT_NEXT)  -- sentences
     len_ctx_next = self:calculate_context_length(len_ctx_next, delims_map_part_of_sentence, post_p, CONTEXT_NEXT)  -- parts of sentence
     logger.info("AnkiNote#get_custom_context() - len_ctx_next", len_ctx_next)
     if len_ctx_next > 0 then
+        -- TODO: long term integrate into get_context_at_char
         -- do not include trailing delimiter, except it is one of these
         local ch = self:get_context_at_char(len_ctx_next, CONTEXT_NEXT)
         if not retain_trailing_delims[ch] then
