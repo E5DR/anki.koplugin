@@ -88,7 +88,6 @@ function CustomContextMenu:init()
     -- char counter is reset to 0 when sentence part count is changed
     local prev_p_inc = function(inc)
         local reset_is_sufficient = (inc > 0 and self.prev_c_cnt < 0) or (inc < 0 and self.prev_c_cnt > 0)
-        reset_is_sufficient = false -- DEBUG
         if reset_is_sufficient then
             -- just reset to next part-of-sentence if there is a character offset in the opposite direction 
             update({ prev_c = 0})
@@ -98,7 +97,6 @@ function CustomContextMenu:init()
     end
     local next_p_inc = function(inc)
         local reset_is_sufficient = (inc > 0 and self.prev_c_cnt < 0) or (inc < 0 and self.prev_c_cnt > 0)
-        reset_is_sufficient = false -- DEBUG
         if reset_is_sufficient then
             -- just reset to next part-of-sentence if there is a character offset in the opposite direction
             -- Note: what about larger increments (currently not the case)? Will be eaten currently
@@ -116,7 +114,6 @@ function CustomContextMenu:init()
         local prev_ctx_current, next_ctx_current = self.note:get_custom_context(self.prev_s_cnt, self.prev_p_cnt, self.prev_c_cnt, self.next_s_cnt, self.next_p_cnt, self.next_c_cnt)
         local prev_ctx_reset, next_ctx_reset = self.note:get_custom_context(self.prev_s_cnt, 0, 0, self.next_s_cnt, 0, 0)
         local reset_is_sufficient = (inc > 0 and #next_ctx_reset > #next_ctx_current) or (inc < 0 and #next_ctx_reset < #next_ctx_current)
-        reset_is_sufficient = false -- DEBUG
         if reset_is_sufficient then
             -- If resetting part + char results will result in a context that is further in the desired direction, then just do that
             -- Note: might also check if it is longer than the next sentence
@@ -135,7 +132,6 @@ function CustomContextMenu:init()
         local prev_ctx_current, next_ctx_current = self.note:get_custom_context(self.prev_s_cnt, self.prev_p_cnt, self.prev_c_cnt, self.next_s_cnt, self.next_p_cnt, self.next_c_cnt)
         local prev_ctx_reset, next_ctx_reset = self.note:get_custom_context(self.prev_s_cnt, 0, 0, self.next_s_cnt, 0, 0)
         local reset_is_sufficient = (inc > 0 and #next_ctx_reset > #next_ctx_current) or (inc < 0 and #next_ctx_reset < #next_ctx_current)
-        reset_is_sufficient = false -- DEBUG
         if reset_is_sufficient then
             -- If resetting part + char results will result in a context that is further in the desired direction, then just do that
             -- Note: might also check if it is longer than the next sentence
