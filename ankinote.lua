@@ -5,9 +5,6 @@ local u = require("lua_utils/utils")
 local AnkiNote = {
 }
 
-local CONTEXT_NEXT = 0
-local CONTEXT_PREV = 1
-
 --[[
 -- Determine trimmed word context for consecutive lookups.
 -- When a user updates the text in a dictionary popup window and thus gets a new popup
@@ -79,8 +76,8 @@ end
 -- Applies safety checks and automatically expands the context table if necessary.
 -- @param n: Which char to return, counted starting from the lookupword, beginning
 -- at one (so the first char is char 1).
--- @param which_context: Either CONTEXT_PREV or CONTEXT_NEXT. For CONTEXT_PREV n is
--- applied backward (towards the left).
+-- @param which_context: Which context table to use. Either "prev_context_table" or
+-- "next_context_table". For the previous context, n is applied backward (towards the left).
 --]]
 function AnkiNote:get_context_at_char(n, which_context)
     --                backwards     forwards  
@@ -93,15 +90,15 @@ function AnkiNote:get_context_at_char(n, which_context)
     assert(n >= 1)
     local idx -- corresponding index in the context_table (differs from n when going backwards)
     local ch
-    if #self.context_table[which_context] < n then self:expand_content() end
-    if which_context == CONTEXT_PREV then
-        idx = #self.context_table[which_context] - (n - 1) -- one-indexing is not applicable when accessing backwards
+    if #self[which_context] < n then self:expand_content() end
+    if which_context == "prev_context_table" then
+        idx = #self[which_context] - (n - 1) -- one-indexing is not applicable when accessing backwards
     else
         idx = n  -- in context characters are counted from one and the same goes for lua tables, everything is fine
     end
-    ch = self.context_table[which_context][idx]
+    ch = self[which_context][idx]
     logger.info("AnkiNote#get_context_at_char() - n", n, "ch", ch, "idx", idx)
-    assert(ch ~= nil, ("Something went wrong when parsing context! idx: %d, context size: %d"):format(idx, #self.context_table[which_context]))
+    assert(ch ~= nil, ("Something went wrong when parsing context! idx: %d, context size: %d"):format(idx, #self[which_context]))
     return ch
 end
 
@@ -110,8 +107,8 @@ end
 -- @param n: Size of context to get, counted starting from the lookupword, beginning
 -- at one (so the first char is char 1). A value of 0 returns an empty table.
 -- @param offset: Offset for starting position (optional)
--- @param which_context: Either CONTEXT_PREV or CONTEXT_NEXT. For CONTEXT_PREV n is
--- applied backward (towards the left).
+-- @param which_context: Which context table to use. Either "prev_context_table" or
+-- "next_context_table". For the previous context, n is applied backward (towards the left).
 --]]
 function AnkiNote:get_context_of_length(n, which_context, offset)
     --                backwards     forwards  
@@ -127,17 +124,17 @@ function AnkiNote:get_context_of_length(n, which_context, offset)
         offset_ = 0
     end
     local start, stop -- both start and stop are inclusive
-    if #self.context_table[which_context] < n + offset_ then self:expand_content() end
-    if which_context == CONTEXT_NEXT then
+    if #self[which_context] < n + offset_ then self:expand_content() end
+    if which_context == "next_context_table" then
         start = 1
         stop = n
     else
-        start = #self.context_table[which_context] - (n - 1)
-        stop = #self.context_table[which_context]
+        start = #self[which_context] - (n - 1)
+        stop = #self[which_context]
     end
     start = start + offset_
     stop = stop + offset_
-    local content = table.concat(self.context_table[which_context], "", start, stop)
+    local content = table.concat(self[which_context], "", start, stop)
     logger.info(string.format("AnkiNote#get_context_of_length() - start %d, stop %d, content '%s'", start, stop, content))
     -- since Japanese characters are multi byte, it is expected that #content > n
     -- TODO: fill the table in a way that every index contains exactly one character so #content == n
@@ -155,8 +152,8 @@ end
 -- @param delim: A set with the delimiters that should be searched for
 -- @param n: We want to look for the n-th occurance of delim. Can be negative (useful in combination
 -- with len_offset)
--- @param which_context: Either CONTEXT_PREV or CONTEXT_NEXT. Since the context length is counted beginning
--- from the matched word, the search is conducted backward (towards the left) in case of CONTEXT_PREV.
+-- @param which_context: Which context table to use. Either "prev_context_table" or
+-- "next_context_table". For the previous context, the search is conducted backward (towards the left).
 --]]
 function AnkiNote:calculate_context_length(len_offset, delim, n, which_context)
 
@@ -188,7 +185,7 @@ function AnkiNote:calculate_context_length(len_offset, delim, n, which_context)
             else
                 delims_matched = delims_matched + 1
                 logger.info("AnkiNote#calculate_context_length() - delimiter matched, count:", delims_matched)
-                -- if which_context == CONTEXT_NEXT and retain_trailing_delims[ch] then
+                -- if which_context == "next_context_table" and retain_trailing_delims[ch] then
                 --    break -- do not count the delimiter
                 -- end
             end
@@ -225,8 +222,8 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
 
     -- calculate the length of the context that should be prepended to the lookupword
     local len_ctx_prev = 0
-    len_ctx_prev = self:calculate_context_length(len_ctx_prev, delims_map_sentence, pre_s, CONTEXT_PREV)  -- sentences
-    len_ctx_prev = self:calculate_context_length(len_ctx_prev, delims_map_part_of_sentence, pre_p, CONTEXT_PREV)  -- parts of sentence
+    len_ctx_prev = self:calculate_context_length(len_ctx_prev, delims_map_sentence, pre_s, "prev_context_table")  -- sentences
+    len_ctx_prev = self:calculate_context_length(len_ctx_prev, delims_map_part_of_sentence, pre_p, "prev_context_table")  -- parts of sentence
     logger.info("AnkiNote#get_custom_context() - len_ctx_prev", len_ctx_prev)
     if len_ctx_prev > 0 then
         -- do not include the leading delimiter we matched on
@@ -235,7 +232,7 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
     while len_ctx_prev > 0 do
         -- remove preceding whitespace, going from outward back inside
         -- Note: extract to function, for example trim_whitespace() (both pre and next)
-        local ch = self:get_context_at_char(len_ctx_prev, CONTEXT_PREV)
+        local ch = self:get_context_at_char(len_ctx_prev, "prev_context_table")
         if whitespace_map[ch] then
             len_ctx_prev = len_ctx_prev - 1
         else
@@ -245,17 +242,17 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
     logger.info("AnkiNote#get_custom_context() - len_ctx_prev", len_ctx_prev)
     len_ctx_prev = len_ctx_prev + pre_c   -- apply context offset for characters
     logger.info("AnkiNote#get_custom_context() - len_ctx_prev", len_ctx_prev)
-    local prepended_content = self:get_context_of_length(len_ctx_prev, CONTEXT_PREV)
+    local prepended_content = self:get_context_of_length(len_ctx_prev, "prev_context_table")
 
     -- calculate the length of the context that should be appended to the lookupword
     local len_ctx_next = 0
-    len_ctx_next = self:calculate_context_length(len_ctx_next, delims_map_sentence, post_s, CONTEXT_NEXT)  -- sentences
-    len_ctx_next = self:calculate_context_length(len_ctx_next, delims_map_part_of_sentence, post_p, CONTEXT_NEXT)  -- parts of sentence
+    len_ctx_next = self:calculate_context_length(len_ctx_next, delims_map_sentence, post_s, "next_context_table")  -- sentences
+    len_ctx_next = self:calculate_context_length(len_ctx_next, delims_map_part_of_sentence, post_p, "next_context_table")  -- parts of sentence
     logger.info("AnkiNote#get_custom_context() - len_ctx_next", len_ctx_next)
     if len_ctx_next > 0 then
         -- TODO: long term integrate into get_context_at_char
         -- do not include trailing delimiter, except it is one of these
-        local ch = self:get_context_at_char(len_ctx_next, CONTEXT_NEXT)
+        local ch = self:get_context_at_char(len_ctx_next, "next_context_table")
         if not retain_trailing_delims[ch] then
             len_ctx_next = len_ctx_next - 1
         end
@@ -263,7 +260,7 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
     logger.info("AnkiNote#get_custom_context() - len_ctx_next", len_ctx_next)
     len_ctx_next = len_ctx_next + post_c -- apply context offset for characters
     logger.info("AnkiNote#get_custom_context() - len_ctx_next", len_ctx_next)
-    local appended_content = self:get_context_of_length(len_ctx_next, CONTEXT_NEXT)
+    local appended_content = self:get_context_of_length(len_ctx_next, "next_context_table")
 
     -- These 2 variables can be used to detect if any content was prepended / appended
     self.has_prepended_content = len_ctx_prev > 0
@@ -348,28 +345,24 @@ end
 
 function AnkiNote:init_context_buffer(size)
     logger.info(("(re)initializing context buffer with size: %d"):format(size))
-    -- Keeping both context tables in a table versus in two separate variables allows
-    -- to hold a reference to one of the context tables that will be updated after re-initialisation
-    if not self.context_table then
-        self.context_table = {}
-    end
-    if self.context_table[CONTEXT_PREV] and self.context_table[CONTEXT_NEXT] then
-        logger.info(("before reinit: prev table = %d, next table = %d"):format(#self.context_table[CONTEXT_PREV], #self.context_table[CONTEXT_NEXT]))
+    if self.prev_context_table and self.next_context_table then
+        logger.info(("before reinit: prev table = %d, next table = %d"):format(#self.prev_context_table, #self.next_context_table))
     end
     local skipped_chars = u.to_set(util.splitToChars(("\n\r")))
     local prev_c, next_c = self.ui.highlight:getSelectedWordContext(size)
     -- pass trimmed word context along to be modified
     prev_c = prev_c .. self.word_trim.before
     next_c = self.word_trim.after .. next_c
-    self.context_table[CONTEXT_PREV] = {}
+    self.prev_context_table = {}
     for _, ch in ipairs(util.splitToChars(prev_c)) do
-        if not skipped_chars[ch] then table.insert(self.context_table[CONTEXT_PREV], ch) end
+        if not skipped_chars[ch] then table.insert(self.prev_context_table, ch) end
     end
-    self.context_table[CONTEXT_NEXT] = {}
+    self.next_context_table = {}
     for _, ch in ipairs(util.splitToChars(next_c)) do
-        if not skipped_chars[ch] then table.insert(self.context_table[CONTEXT_NEXT], ch) end
+        if not skipped_chars[ch] then table.insert(self.next_context_table, ch) end
     end
-    logger.info(("after reinit: prev table = %d, next table = %d"):format(#self.context_table[CONTEXT_PREV], #self.context_table[CONTEXT_NEXT]))
+    logger.info(("after reinit: prev table = %d, next table = %d"):format(#self.prev_context_table, #self.next_context_table))
+
 end
 
 function AnkiNote:set_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c)
