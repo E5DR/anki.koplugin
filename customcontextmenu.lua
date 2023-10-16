@@ -157,10 +157,10 @@ function CustomContextMenu:init()
     local reset_next =                make_button("Reset", btn_width*2, function() self:reset_next(); self:update_context() end)
 
     -- holding the ±1 buttons allows to jump back and forth in larger increments 
-    remove_prev_char.hold_callback = function() prev_c_inc(- self.conf.custom_context_jump_size:get_value()) end
-    append_prev_char.hold_callback = function() prev_c_inc(  self.conf.custom_context_jump_size:get_value()) end
-    remove_next_char.hold_callback = function() next_c_inc(- self.conf.custom_context_jump_size:get_value()) end
-    append_next_char.hold_callback = function() next_c_inc(  self.conf.custom_context_jump_size:get_value()) end
+    remove_prev_char.hold_callback = function() prev_c_inc(- self.note.conf.custom_context_jump_size:get_value()) end
+    append_prev_char.hold_callback = function() prev_c_inc(  self.note.conf.custom_context_jump_size:get_value()) end
+    remove_next_char.hold_callback = function() next_c_inc(- self.note.conf.custom_context_jump_size:get_value()) end
+    append_next_char.hold_callback = function() next_c_inc(  self.note.conf.custom_context_jump_size:get_value()) end
 
     -- holding the << / >> buttons makes them apply sentences instead of parts of sentences
     remove_prev_sentence_part.hold_callback = function() prev_s_inc(-1) end
@@ -257,7 +257,7 @@ function CustomContextMenu:reset()
 end
 
 function CustomContextMenu:reset_prev()
-    if self.opts.conf.default_context_is_sentence_part:get_value() then
+    if self.note.conf.default_context_is_sentence_part:get_value() then
         self.prev_s_cnt = 0
         self.prev_p_cnt = 1
     else
@@ -268,7 +268,7 @@ function CustomContextMenu:reset_prev()
 end
 
 function CustomContextMenu:reset_next()
-    if self.opts.conf.default_context_is_sentence_part:get_value() then
+    if self.note.conf.default_context_is_sentence_part:get_value() then
         self.next_s_cnt = 0
         self.next_p_cnt = 1
     else
