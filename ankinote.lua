@@ -109,37 +109,38 @@ end
 -- @param offset: Offset for starting position (optional)
 -- @param which_context: Which context table to use. Either "prev_context_table" or
 -- "next_context_table". For the previous context, n is applied backward (towards the left).
+-- @return string with context as requested
 --]]
 function AnkiNote:get_context_of_length(n, which_context, offset)
-    --                backwards     forwards  
-    -- idx:           ---->x        -->x      
+    --                    prev        next  
     --                cccccccccwwwwwcccccccccc
-    -- n:                  x<--     -->x      
+    --                  <--n-->     <--n-->      
 
     logger.info("AnkiNote#get_context_of_length() - n", n, "direction", which_context, "offset", offset)
     assert(type(n) == "number")
     assert(n >= 0)
-    local offset_
     if not offset then
-        offset_ = 0
+        offset = 0
     end
     local start, stop -- both start and stop are inclusive
-    if #self[which_context] < n + offset_ then self:expand_content() end
+    local len_with_offset = n + offset
+    -- Since we are not incrementing character by character, there might be a situation where a
+    -- single expansion to double the size is not sufficient (especially when the table is still small)
+    while #self[which_context] < len_with_offset do self:expand_content() end
     if which_context == "next_context_table" then
-        start = 1
-        stop = n
+        start = 1 + offset
+        stop = len_with_offset
     else
-        start = #self[which_context] - (n - 1)
-        stop = #self[which_context]
+        start = #self[which_context] - len_with_offset + 1
+        stop = #self[which_context] - offset
     end
-    start = start + offset_
-    stop = stop + offset_
+    start = start
+    stop = stop
     local content = table.concat(self[which_context], "", start, stop)
     logger.info(string.format("AnkiNote#get_context_of_length() - start %d, stop %d, content '%s'", start, stop, content))
     -- since Japanese characters are multi byte, it is expected that #content > n
-    -- TODO: fill the table in a way that every index contains exactly one character so #content == n
-    -- TODO: decide: is this function supposed to return a table of characters or a string?
     assert(#content >= n, string.format("Something went wrong when retrieving context! n: %d, context size: %d", n, #content))
+    assert(type(content) == "string")
     return content
 end
 
