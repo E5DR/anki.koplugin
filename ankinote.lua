@@ -205,13 +205,18 @@ function AnkiNote:calculate_context_length(len_offset, delim, n, which_context)
 end
 
 --[[
--- Returns the context before and after the lookup word, the amount of context depends on the following parameters
+-- Returns the context before and after the lookup word together with the length of the context.
+-- The amount of context depends on the following parameters
 -- @param pre_s: amount of sentences prepended
 -- @param pre_p: amount of sentence parts prepended (between comma etc.)
 -- @param pre_c: amount of characters prepended
 -- @param post_s: amount of sentences appended
 -- @param post_p: amount of sentence parts appended (between comma etc.)
 -- @param post_c: amount of characters appended
+-- @return: prepended_content, appended_content, len_ctx_prev, len_ctx_next
+-- The context is a string, the length specifies how many characters long the piece of context is.
+-- Returning the context length makes working with the obtained context easier, since with multibyte
+-- characters #foo does not result in the real length.
 --]]
 function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c)
     logger.info("AnkiNote#get_custom_context():", pre_s, pre_p, pre_c, post_s, post_p, post_c)
@@ -266,7 +271,8 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
     -- These 2 variables can be used to detect if any content was prepended / appended
     self.has_prepended_content = len_ctx_prev > 0
     self.has_appended_content = len_ctx_next > 0
-    return prepended_content, appended_content
+
+    return prepended_content, appended_content, len_ctx_prev, len_ctx_next
 end
 
 function AnkiNote:get_picture_context()
