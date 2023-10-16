@@ -216,7 +216,7 @@ end
 -- @param post_c: amount of characters appended
 --]]
 function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c)
-    logger.info("AnkiNote#get_custom_context()", pre_s, pre_p, pre_c, post_s, post_p, post_c)
+    logger.info("AnkiNote#get_custom_context():", pre_s, pre_p, pre_c, post_s, post_p, post_c)
 
     local delims_map_sentence = u.to_set(util.splitToChars(self.conf.sentence_delimiters:get_value()))
     local delims_map_part_of_sentence = u.to_set(util.splitToChars(self.conf.part_of_sentence_delimiters:get_value()))
@@ -372,8 +372,9 @@ function AnkiNote:init_context_buffer(size)
     logger.info(("after reinit: prev table = %d, next table = %d"):format(#self.context_table[CONTEXT_PREV], #self.context_table[CONTEXT_NEXT]))
 end
 
-function AnkiNote:set_custom_context(pre_s, pre_c, post_s, post_c)
-    self.context = { pre_s, pre_c, post_s, post_c }
+function AnkiNote:set_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c)
+    self.context = { pre_s, pre_p, pre_c, post_s, post_p, post_c }
+
 end
 
 function AnkiNote:add_tags(tags)
@@ -432,7 +433,11 @@ function AnkiNote:new(popup_dict)
     note:load_extensions()
     -- TODO this can be delayed
     note:init_context_buffer(note.context_size)
-    note:set_custom_context(1, 0, 1, 0)
+    if self.conf.default_context_is_sentence_part:get_value() then
+        note:set_custom_context(0, 1, 0, 0, 1, 0)
+    else
+        note:set_custom_context(1, 0, 0, 1, 0, 0)
+    end
     return note
 end
 
