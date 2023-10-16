@@ -279,7 +279,10 @@ function CustomContextMenu:reset_next()
 end
 
 function CustomContextMenu:update_context()
-    local prev, next_ = self.note:get_custom_context(self.prev_s_cnt, self.prev_p_cnt, self.prev_c_cnt, self.next_s_cnt, self.next_p_cnt, self.next_c_cnt)
+    local prev, next_, ctx_prev_len, ctx_next_len = self.note:get_custom_context(self.prev_s_cnt, self.prev_p_cnt, self.prev_c_cnt, self.next_s_cnt, self.next_p_cnt, self.next_c_cnt)
+    local peek_length = self.note.conf.custom_context_peek_length:get_value()
+    local peek_prev = self.note:get_context_of_length(peek_length, "prev_context_table", ctx_prev_len)
+    local peek_next = self.note:get_context_of_length(peek_length, "next_context_table", ctx_next_len)
     local css = [[
         h2 {
             display: inline;
@@ -290,13 +293,16 @@ function CustomContextMenu:update_context()
             background-color: red;
             text-align: center;
         }
+        .peek {
+            color: gray;
+        }
         @page {
             margin: 0;
             font-family: 'Noto Sans CJK';
         }
     ]]
-    local context_fmt = '<div lang="ja"><p>%s<h2 class="lookupword">%s</h2>%s</p></div>'
-    local context = context_fmt:format(prev, self.note.popup_dict.word, next_)
+    local context_fmt = '<div lang="ja"><p><span class="peek">%s</span>%s<h2 class="lookupword">%s</h2>%s<span class="peek">%s</span></p></div>'
+    local context = context_fmt:format(peek_prev, prev, self.note.popup_dict.word, next_, peek_next)
 
     self[1]:free()
     self.scroll_widget.htmlbox_widget:setContent(context, css, Screen:scaleBySize(self.font_size))
