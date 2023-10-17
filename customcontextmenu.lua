@@ -294,14 +294,14 @@ function CustomContextMenu:update_context()
             text-align: center;
         }
         .peek {
-            color: gray;
+            color: #A9A9A9;
         }
         @page {
             margin: 0;
             font-family: 'Noto Sans CJK';
         }
     ]]
-    local context_fmt = '<div lang="ja"><p><span class="peek">%s</span>%s<h2 class="lookupword">%s</h2>%s<span class="peek">%s</span></p></div>'
+    local context_fmt = '<div lang="ja"><p><span class="peek">…%s</span>%s<h2 class="lookupword">%s</h2>%s<span class="peek">%s…</span></p></div>'
     local context = context_fmt:format(peek_prev, prev, self.note.popup_dict.word, next_, peek_next)
 
     self[1]:free()
