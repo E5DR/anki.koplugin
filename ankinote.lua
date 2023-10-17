@@ -145,26 +145,27 @@ function AnkiNote:get_context_of_length(n, which_context, offset)
 end
 
 --[[
--- Returns the length of the context until the n-th delimiter.
--- A length of 0 means "no context", 1 is "one character of context" and so forth.
+-- Finds and returns the absolute position of the n-th occurence of one of the characters specified by delim.
+-- Also returns the delimiter that was matched
+-- Searching for the 0-th occurrence returns 0, as does a search with negative n that does not yield a result.
 -- @param len_offset: Offset for the start of the search (for example obtained from a previous call
--- to this function). It is applied in the direction of the search and included in the returned value
--- (that is, the returned value is absolute, not relative). Like the return value, this is counted from 1
--- @param delim: A set with the delimiters that should be searched for
--- @param n: We want to look for the n-th occurance of delim. Can be negative (useful in combination
--- with len_offset)
--- @param which_context: Which context table to use. Either "prev_context_table" or
--- "next_context_table". For the previous context, the search is conducted backward (towards the left).
+-- to this function). It is applied in the direction of the search. 1-indexed like the position.
+-- @param delim: A set with the delimiters that should be matched.
+-- @param n: We want to look for the n-th occurance of delim. Can be negative for a backwards search
+-- (useful in combination with len_offset).
+-- @param which_context: Which context table to use. Either "prev_context_table" or "next_context_table".
+-- For the previous context, the search is conducted backward (towards the left).
+-- @return int, char
 --]]
-function AnkiNote:calculate_context_length(len_offset, delim, n, which_context)
+function AnkiNote:get_pos_of_next_delim(delim, n, which_context, offset)
 
-    logger.info("AnkiNote#calculate_context_length() - len_offset", len_offset, "n", n, "direction_prev", which_context)
+    logger.info("AnkiNote#get_pos_of_next_delim() - len_offset", offset, "n", n, "direction_prev", which_context)
 
-    assert(type(len_offset) == "number")
-    assert(len_offset >= 0)
+    assert(type(offset) == "number")
+    assert(offset >= 0)
     assert(type(n) == "number")
-    
-    local len_context = len_offset  -- length of context that we looked at so far (absolute)
+
+    local idx = offset
     local delims_matched = 0         -- number of the limiters that were matched so far
     local len_incr = 1               -- whether we move forward or backward through the context table
     if n < 0 then
@@ -174,35 +175,92 @@ function AnkiNote:calculate_context_length(len_offset, delim, n, which_context)
     local is_first_char = true
 
     while delims_matched < math.abs(n) do
-        local next_index = math.max(1, len_context + len_incr)
-        local last_ch
-        local ch = self:get_context_at_char(next_index, which_context)
+        local next_idx = math.max(1, idx + len_incr)
+        local ch = self:get_context_at_char(next_idx, which_context)
         if delim[ch] then
-            if (len_offset > 1 and is_first_char) then
+            if (offset > 1 and is_first_char) then
                 --  ensure we do not count the same delimiter on which we stopped during a previous call
                 --  Note that since the matched word might be the first or last one in a sentence / -part,
                 --  we still want to count a delimiter if it is the very first character
-                logger.info("AnkiNote#calculate_context_length() - delimiter matched", delims_matched, "ignoring since we matched that last time")
+                logger.info("AnkiNote#get_pos_of_next_delim() - delimiter matched", delims_matched, "ignoring since we matched that last time")
             else
                 delims_matched = delims_matched + 1
-                logger.info("AnkiNote#calculate_context_length() - delimiter matched, count:", delims_matched)
+                logger.info("AnkiNote#get_pos_of_next_delim() - delimiter matched, count:", delims_matched)
                 -- if which_context == "next_context_table" and retain_trailing_delims[ch] then
                 --    break -- do not count the delimiter
                 -- end
             end
         end
-        len_context = next_index
+        idx = next_idx
         is_first_char = false
-        last_ch = ch
-        if len_incr < 0 and len_context <= 1 then
+        if len_incr < 0 and idx <= 1 then
             -- we went backwards and reached the start of the context
             -- stop here since nothing more is left to do (otherwise the function will be stuck in an endless loop)
             break
         end
     end
+    assert(type(idx) == "number")
+    local ch
+    if idx > 0 then
+        ch = self:get_context_at_char(idx, which_context) -- Note: can we just reuse ch from the loop?
+    end
+    return idx, ch
+end
+
+
+--[[
+-- Converts the position of a character in the context from one marked by a number of sentences and
+-- sentence parts into an absolute position counted in number of characters (inclusive).
+-- @param n_s: The number of whole sentences to match. Has to be positive (>=0).
+-- @param n_p: The number of sentence parts to match. Can also be negative (for example 2 sentences
+-- and one sentence part back from there).
+-- @param which_context: Which context table to use. Either "prev_context_table" or "next_context_table".
+-- For the previous context, the search is conducted backward (towards the left).
+-- @param len_offset: Offset for the start of the search (for example obtained from a previous call
+-- to this function). It is applied in the direction of the search and included in the returned value
+-- (since that is absolute). Optional (default value: 0).
+-- @return: int
+-- A length of 0 means "no context", 1 is "one character of context" and so forth.
+-- (that is, the returned value is absolute, not relative).
+--]]
+function AnkiNote:calculate_context_length(n_s, n_p, which_context, len_offset)
+
+    logger.info("AnkiNote#calculate_context_length() - ", "n_s", n_s, "n_p", n_p, "which_context", which_context, "len_offset", len_offset)
+
+    assert(type(n_s) == "number")
+    assert(n_s >= 0)
+    assert(type(n_p) == "number")
+
+    -- Note: to implement any sort of marked behavior, I will probably have to go through delimiters one by one
+    -- implement as state machine
+    local sentence_delimiters = u.to_set(util.splitToChars(self.conf.sentence_delimiters:get_value()))
+    local part_of_sentence_delimiters = u.to_set(util.splitToChars(self.conf.part_of_sentence_delimiters:get_value()))
+    
+    local len_context = len_offset
+    if not len_context then
+        len_context = 0
+    end
+    assert(type(len_context) == "number")
+    assert(len_context >= 0)
+    local d
+    len_context, d = self:get_pos_of_next_delim(sentence_delimiters, n_s, which_context, len_context)  -- sentences
+    len_context, d = self:get_pos_of_next_delim(part_of_sentence_delimiters, n_p, which_context, len_context)  -- parts of sentence
     assert(type(len_context) == "number")
     return len_context
 end
+
+--[[
+-- Returns the optimal way a position can be reached.
+-- For example, n_s=0 n_p=5 could be better described as n_s=2 n_p=1.
+-- @param n_s: The number of whole sentences. Has to be positive (>=0).
+-- @param n_p: The number of sentence parts. Can also be negative.
+-- @param which_context: Which context table to use. Either "prev_context_table" or "next_context_table".
+-- @return: n_s_optimal, n_p_optimal
+--]]
+function AnkiNote:optimize_position(n_s, n_p, which_context, len_offset)
+-- TODO: implement
+end
+
 
 --[[
 -- Returns the context before and after the lookup word together with the length of the context.
@@ -218,18 +276,16 @@ end
 -- Returning the context length makes working with the obtained context easier, since with multibyte
 -- characters #foo does not result in the real length.
 --]]
+-- How to view characters: characters are not part of the position marker `c,p,s`, but rather the position marker is `p,s` and `c` is a separate correction factor that is applied afterwards and independent from that position
+
 function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c)
     logger.info("AnkiNote#get_custom_context():", pre_s, pre_p, pre_c, post_s, post_p, post_c)
 
-    local delims_map_sentence = u.to_set(util.splitToChars(self.conf.sentence_delimiters:get_value()))
-    local delims_map_part_of_sentence = u.to_set(util.splitToChars(self.conf.part_of_sentence_delimiters:get_value()))
     local whitespace_map = u.to_set(util.splitToChars(" 　〿\t\n"))
     local retain_trailing_delims = u.to_set(util.splitToChars(self.conf.retained_trailing_delimiters:get_value()))
 
     -- calculate the length of the context that should be prepended to the lookupword
-    local len_ctx_prev = 0
-    len_ctx_prev = self:calculate_context_length(len_ctx_prev, delims_map_sentence, pre_s, "prev_context_table")  -- sentences
-    len_ctx_prev = self:calculate_context_length(len_ctx_prev, delims_map_part_of_sentence, pre_p, "prev_context_table")  -- parts of sentence
+    local len_ctx_prev = self:calculate_context_length(pre_s, pre_p, "prev_context_table")
     logger.info("AnkiNote#get_custom_context() - len_ctx_prev", len_ctx_prev)
     if len_ctx_prev > 0 then
         -- do not include the leading delimiter we matched on
@@ -246,14 +302,12 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
         end
     end
     logger.info("AnkiNote#get_custom_context() - len_ctx_prev", len_ctx_prev)
-    len_ctx_prev = len_ctx_prev + pre_c   -- apply context offset for characters
+    len_ctx_prev = len_ctx_prev + pre_c   -- apply context offset for characters as manual correction
     logger.info("AnkiNote#get_custom_context() - len_ctx_prev", len_ctx_prev)
     local prepended_content = self:get_context_of_length(len_ctx_prev, "prev_context_table")
 
     -- calculate the length of the context that should be appended to the lookupword
-    local len_ctx_next = 0
-    len_ctx_next = self:calculate_context_length(len_ctx_next, delims_map_sentence, post_s, "next_context_table")  -- sentences
-    len_ctx_next = self:calculate_context_length(len_ctx_next, delims_map_part_of_sentence, post_p, "next_context_table")  -- parts of sentence
+    local len_ctx_next = self:calculate_context_length(post_s, post_p, "next_context_table")
     logger.info("AnkiNote#get_custom_context() - len_ctx_next", len_ctx_next)
     if len_ctx_next > 0 then
         -- TODO: long term integrate into get_context_at_char
@@ -264,7 +318,7 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
         end
     end
     logger.info("AnkiNote#get_custom_context() - len_ctx_next", len_ctx_next)
-    len_ctx_next = len_ctx_next + post_c -- apply context offset for characters
+    len_ctx_next = len_ctx_next + post_c -- apply context offset for characters as manual correction
     logger.info("AnkiNote#get_custom_context() - len_ctx_next", len_ctx_next)
     local appended_content = self:get_context_of_length(len_ctx_next, "next_context_table")
 
