@@ -172,27 +172,15 @@ function AnkiNote:get_pos_of_next_delim(delim, n, which_context, offset)
         -- for negative n we aim to reduce len_context by n delimiters (not increase)
         len_incr = -1
     end
-    local is_first_char = true
 
     while delims_matched < math.abs(n) do
         local next_idx = math.max(1, idx + len_incr)
         local ch = self:get_context_at_char(next_idx, which_context)
         if delim[ch] then
-            if (offset > 1 and is_first_char) then
-                --  ensure we do not count the same delimiter on which we stopped during a previous call
-                --  Note that since the matched word might be the first or last one in a sentence / -part,
-                --  we still want to count a delimiter if it is the very first character
-                logger.info("AnkiNote#get_pos_of_next_delim() - delimiter matched", delims_matched, "ignoring since we matched that last time")
-            else
-                delims_matched = delims_matched + 1
-                logger.info("AnkiNote#get_pos_of_next_delim() - delimiter matched, count:", delims_matched)
-                -- if which_context == "next_context_table" and retain_trailing_delims[ch] then
-                --    break -- do not count the delimiter
-                -- end
-            end
+            delims_matched = delims_matched + 1
+            logger.info("AnkiNote#get_pos_of_next_delim() - delimiter matched, count:", delims_matched)
         end
         idx = next_idx
-        is_first_char = false
         if len_incr < 0 and idx <= 1 then
             -- we went backwards and reached the start of the context
             -- stop here since nothing more is left to do (otherwise the function will be stuck in an endless loop)
@@ -231,23 +219,64 @@ function AnkiNote:calculate_context_length(n_s, n_p, which_context, len_offset)
     assert(n_s >= 0)
     assert(type(n_p) == "number")
 
-    -- Note: to implement any sort of marked behavior, I will probably have to go through delimiters one by one
+    -- Note: to implement any sort of smart behavior, I will probably have to go through delimiters one by one
     -- implement as state machine
     local sentence_delimiters = u.to_set(util.splitToChars(self.conf.sentence_delimiters:get_value()))
     local part_of_sentence_delimiters = u.to_set(util.splitToChars(self.conf.part_of_sentence_delimiters:get_value()))
     
+
     local len_context = len_offset
     if not len_context then
         len_context = 0
     end
     assert(type(len_context) == "number")
     assert(len_context >= 0)
-    local d
-    len_context, d = self:get_pos_of_next_delim(sentence_delimiters, n_s, which_context, len_context)  -- sentences
-    len_context, d = self:get_pos_of_next_delim(part_of_sentence_delimiters, n_p, which_context, len_context)  -- parts of sentence
+    local opening_pairs = {}
+    local valid_closing_pairs = {}
+    local is_first_char = true
+
+
+    local function calculate_single_step(delimiters, n, offset)
+        local direction_outward = n > 0    -- n > 0
+        local matched_a_complete_pair = false
+        local idx = offset
+        local len_incr = 1               -- whether to move forward (1) or backward (-1)
+        if not direction_outward then
+            len_incr = -1 -- for negative n we aim to reduce the context by n delimiters (not increase)
+        end
+
+        for i = 1, math.abs(n) do
+            matched_a_complete_pair = false
+            local d
+            local delim_offset
+            if is_first_char then
+                delim_offset = idx
+            else
+                --  ensure we do not count the same delimiter on which we stopped the last time
+                delim_offset = idx + len_incr
+            end
+            idx, d = self:get_pos_of_next_delim(delimiters, len_incr, which_context, delim_offset)
+            if (not direction_outward) and idx <= 0 then
+                -- we went backwards and reached the start of the context
+                -- stop here since nothing more is left to do (otherwise the function will be stuck in an endless loop)
+                break
+            end
+            is_first_char = false
+        end
+        -- if not (matched_a_complete_pair or is_normal_punctuation(self:get_context_at_char(idx))) then
+        --     idx = idx - 1
+        -- end
+        return idx
+    end
+
+    len_context = calculate_single_step(sentence_delimiters, n_s, 0)  -- sentences
+    len_context = calculate_single_step(part_of_sentence_delimiters, n_p, len_context)  -- parts of sentence
+
     assert(type(len_context) == "number")
     return len_context
 end
+
+
 
 --[[
 -- Returns the optimal way a position can be reached.
@@ -308,15 +337,6 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
 
     -- calculate the length of the context that should be appended to the lookupword
     local len_ctx_next = self:calculate_context_length(post_s, post_p, "next_context_table")
-    logger.info("AnkiNote#get_custom_context() - len_ctx_next", len_ctx_next)
-    if len_ctx_next > 0 then
-        -- TODO: long term integrate into get_context_at_char
-        -- do not include trailing delimiter, except it is one of these
-        local ch = self:get_context_at_char(len_ctx_next, "next_context_table")
-        if not retain_trailing_delims[ch] then
-            len_ctx_next = len_ctx_next - 1
-        end
-    end
     logger.info("AnkiNote#get_custom_context() - len_ctx_next", len_ctx_next)
     len_ctx_next = len_ctx_next + post_c -- apply context offset for characters as manual correction
     logger.info("AnkiNote#get_custom_context() - len_ctx_next", len_ctx_next)
