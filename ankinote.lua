@@ -263,6 +263,7 @@ function AnkiNote:calculate_context_length(n_s, n_p, which_context, len_offset)
         logger.info("AnkiNote#calculate_context_length()#parse_pairs() - ", "d", d, "idx", idx, "direction_outward", direction_outward)
         -- TODO: pull pair state into this function via a closure
 
+        -- TODO: define these statically (once) instead of here
         -- We focus on japanese quotation marks for now, since there are too many different ways how quotation marks are used depending on language, culture and region.
         local paired_delimiters = {{"「", "」"}, {"『", "』"}, {"（", "）"},
                                    {"【", "】"}, { "(", ")" }, {"\"", "\""},
@@ -418,7 +419,7 @@ end
 -- @param post_s: amount of sentences appended
 -- @param post_p: amount of sentence parts appended (between comma etc.)
 -- @param post_c: amount of characters appended
--- @return: prepended_content, appended_content, len_ctx_prev, len_ctx_next
+-- @return: prepended_content, appended_content, len_prev, len_next
 -- The context is a string, the length specifies how many characters long the piece of context is.
 -- Returning the context length makes working with the obtained context easier, since with multibyte
 -- characters #foo does not result in the real length.
@@ -428,38 +429,54 @@ end
 function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c)
     logger.info("AnkiNote#get_custom_context():", pre_s, pre_p, pre_c, post_s, post_p, post_c)
 
-    local whitespace_map = u.to_set(util.splitToChars(" 　〿\t\n"))
-
-    -- calculate the length of the context that should be prepended to the lookupword
-    local len_ctx_prev = self:calculate_context_length(pre_s, pre_p, "prev_context_table")
-    logger.info("AnkiNote#get_custom_context() - len_ctx_prev", len_ctx_prev)
-    while len_ctx_prev > 0 do
+    local function trim_whitespace(len_prev, len_next)
+        local whitespace_map = u.to_set(util.splitToChars(" 　〿\t\n"))
         -- remove preceding whitespace, going from outward back inside
-        -- Note: extract to function, for example trim_whitespace() (both pre and next)
-        local ch = self:get_context_at_char(len_ctx_prev, "prev_context_table")
-        if whitespace_map[ch] then
-            len_ctx_prev = len_ctx_prev - 1
-        else
-            break
+        while len_prev > 0 do
+            local ch = self:get_context_at_char(len_prev, "prev_context_table")
+            if whitespace_map[ch] then
+                len_prev = len_prev - 1
+            else
+                break
+            end
         end
+        -- TODO: remove trailing whitespace, going from outward back inside
+        return len_prev, len_next
     end
-    logger.info("AnkiNote#get_custom_context() - len_ctx_prev", len_ctx_prev)
-    len_ctx_prev = len_ctx_prev + pre_c   -- apply context offset for characters as manual correction
-    logger.info("AnkiNote#get_custom_context() - len_ctx_prev", len_ctx_prev)
-    local prepended_content = self:get_context_of_length(len_ctx_prev, "prev_context_table")
 
-    -- calculate the length of the context that should be appended to the lookupword
-    local len_ctx_next = self:calculate_context_length(post_s, post_p, "next_context_table")
-    logger.info("AnkiNote#get_custom_context() - len_ctx_next", len_ctx_next)
-    len_ctx_next = len_ctx_next + post_c -- apply context offset for characters as manual correction
-    logger.info("AnkiNote#get_custom_context() - len_ctx_next", len_ctx_next)
-    local appended_content = self:get_context_of_length(len_ctx_next, "next_context_table")
+    local function allowed_trailing_delimiters(len_prev, len_next)
+        -- TODO:
+        return len_prev, len_next
+    end
 
+    local function smart_paired_delimiters(len_prev, len_next)
+        return len_prev, len_next
+    end
+
+
+    -- calculate basic context length to s,p position without adjustments
+    local len_prev = self:calculate_context_length(pre_s, pre_p, "prev_context_table")
+    local len_next = self:calculate_context_length(post_s, post_p, "next_context_table")
+    logger.info("AnkiNote#get_custom_context() -", "len_prev", len_prev, "len_next", len_next, "(without adjustments)")
+
+    -- apply adjustments for smart behavior
+    len_prev, len_next = smart_paired_delimiters(len_prev, len_next) -- remove paired delims that do not have a match, auto-extend beyond a trailing "normal delimiter"
+    len_prev, len_next = trim_whitespace(len_prev, len_next)
+    len_prev, len_next = allowed_trailing_delimiters(len_prev, len_next) -- remove all non-paired delims that are not allowed
+    logger.info("AnkiNote#get_custom_context() -", "len_prev", len_prev, "len_next", len_next, "(after applying adjustments)")
+
+    -- apply context offset for characters as manual correction
+    len_prev = len_prev + pre_c
+    len_next = len_next + post_c
+    logger.info("AnkiNote#get_custom_context() -", "len_prev", len_prev, "len_next", len_next, "(after applying context offset)")
+
+    -- build return values
+    local prepended_content = self:get_context_of_length(len_prev, "prev_context_table")
+    local appended_content = self:get_context_of_length(len_next, "next_context_table")
     -- These 2 variables can be used to detect if any content was prepended / appended
-    self.has_prepended_content = len_ctx_prev > 0
-    self.has_appended_content = len_ctx_next > 0
-
-    return prepended_content, appended_content, len_ctx_prev, len_ctx_next
+    self.has_prepended_content = len_prev > 0
+    self.has_appended_content = len_next > 0
+    return prepended_content, appended_content, len_prev, len_next
 end
 
 function AnkiNote:get_picture_context()
