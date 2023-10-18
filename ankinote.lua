@@ -88,6 +88,8 @@ function AnkiNote:get_context_at_char(n, which_context)
 
     assert(type(n) == "number")
     assert(n >= 1)
+    assert(which_context == "prev_context_table" or which_context == "next_context_table")
+
     local idx -- corresponding index in the context_table (differs from n when going backwards)
     local ch
     if #self[which_context] < n then self:expand_content() end
@@ -97,7 +99,7 @@ function AnkiNote:get_context_at_char(n, which_context)
         idx = n  -- in context characters are counted from one and the same goes for lua tables, everything is fine
     end
     ch = self[which_context][idx]
-    logger.info("AnkiNote#get_context_at_char() - n", n, "ch", ch, "idx", idx)
+    logger.info("AnkiNote#get_context_at_char() - n", n, "ch", ch, "idx", idx, "which_context", which_context)
     assert(ch ~= nil, ("Something went wrong when parsing context! idx: %d, context size: %d"):format(idx, #self[which_context]))
     return ch
 end
@@ -119,6 +121,8 @@ function AnkiNote:get_context_of_length(n, which_context, offset)
     logger.info("AnkiNote#get_context_of_length() - n", n, "direction", which_context, "offset", offset)
     assert(type(n) == "number")
     assert(n >= 0)
+    assert(which_context == "prev_context_table" or which_context == "next_context_table")
+
     if not offset then
         offset = 0
     end
@@ -219,11 +223,29 @@ function AnkiNote:calculate_context_length(n_s, n_p, which_context, len_offset)
     assert(n_s >= 0)
     assert(type(n_p) == "number")
 
+
+    -- DEBUG
+    function dump(o)
+        if type(o) == 'table' then
+           local s = '{ '
+           for k,v in pairs(o) do
+              if type(k) ~= 'number' then k = '"'..k..'"' end
+              s = s .. '['..k..'] = ' .. dump(v) .. ','
+           end
+           return s .. '} '
+        else
+           return tostring(o)
+        end
+     end
+
+
     -- Note: to implement any sort of smart behavior, I will probably have to go through delimiters one by one
     -- implement as state machine
     local sentence_delimiters = u.to_set(util.splitToChars(self.conf.sentence_delimiters:get_value()))
+    -- TODO: have the setting contain only the sentence part delimiters that are not already a sentence delimiter
     local part_of_sentence_delimiters = u.to_set(util.splitToChars(self.conf.part_of_sentence_delimiters:get_value()))
-    
+    -- paired delimiters are handled separately from this
+    local retain_trailing_delims = u.to_set(util.splitToChars(self.conf.retained_trailing_delimiters:get_value()))
 
     local len_context = len_offset
     if not len_context then
@@ -231,19 +253,102 @@ function AnkiNote:calculate_context_length(n_s, n_p, which_context, len_offset)
     end
     assert(type(len_context) == "number")
     assert(len_context >= 0)
-    local opening_pairs = {}
-    local valid_closing_pairs = {}
+    local opening_pairs_stack = {}
+    local valid_closing_pairs_stack = {}
     local is_first_char = true
+    local matched_a_complete_pair = false
 
+    -- Track state of pairs and return whether the current
+    local function parse_pairs(d, idx, direction_outward)
+        logger.info("AnkiNote#calculate_context_length()#parse_pairs() - ", "d", d, "idx", idx, "direction_outward", direction_outward)
+        -- TODO: pull pair state into this function via a closure
+
+        -- We focus on japanese quotation marks for now, since there are too many different ways how quotation marks are used depending on language, culture and region.
+        local paired_delimiters = {{"「", "」"}, {"『", "』"}, {"（", "）"},
+                                   {"【", "】"}, { "(", ")" }, {"\"", "\""},
+                                   { "'", "'" },}
+        local opening_pairs = {}
+        local closing_pairs = {}
+        for direction, context_id in ipairs({"next_context_table", "prev_context_table"}) do
+            local opening = {}
+            local closing = {}
+            for _, pair in ipairs(paired_delimiters) do
+                table.insert(opening, pair[1])
+                table.insert(closing, pair[2])
+            end
+            if context_id == "next_context_table"then
+                opening_pairs[context_id] = u.to_set(opening)
+                closing_pairs[context_id] = u.to_set(closing)
+            else
+                opening_pairs[context_id] = u.to_set(closing)
+                closing_pairs[context_id] = u.to_set(opening)
+            end
+        end
+        logger.info("AnkiNote#calculate_context_length()#parse_pairs() - ", "opening_pairs")
+        logger.info(dump(opening_pairs))
+        logger.info("AnkiNote#calculate_context_length()#parse_pairs() - ", "closing_pairs")
+        logger.info(dump(closing_pairs))
+        -- create a table so that you can find the matching partners to a paired delimiter
+        -- example: matching_pairs["("] == ")"
+        local matching_pairs = {}
+        for i, pair in pairs(paired_delimiters) do
+            matching_pairs[pair[1]] = pair[2]
+            matching_pairs[pair[2]] = pair[1]
+        end
+        logger.info("AnkiNote#calculate_context_length()#parse_pairs() - ", "matching_pairs")
+        logger.info(dump(matching_pairs))
+
+        local matched_a_complete_pair = false
+        if direction_outward then
+            if opening_pairs[which_context][d] then
+                logger.info("AnkiNote#calculate_context_length()#parse_pairs() - matched opening pair", d)
+                table.insert(opening_pairs_stack, {idx=idx, char=d})
+                logger.info(dump(opening_pairs_stack))
+            elseif closing_pairs[which_context][d] then
+                -- Checks if d is a valid closing pair.
+                -- Considers the case of mismatching pairs like (([)), in this case
+                -- throws away the offending opening pairs
+                -- If no matching opening pair exists at all, just ignore this closing pair
+                logger.info("AnkiNote#calculate_context_length()#parse_pairs() - found a closing pair", d)
+                for i=#opening_pairs_stack, 1, -1 do
+                    local opening_delim = opening_pairs_stack[i].char
+                    if matching_pairs[opening_delim] == d then
+                        -- remove matched par and all following entries
+                        while #opening_pairs_stack >= i do 
+                            opening_pairs_stack[#opening_pairs_stack] = nil
+                        end
+                        logger.info("AnkiNote#calculate_context_length()#parse_pairs() - matched a valid closing pair", d)
+                        matched_a_complete_pair = true
+                    end
+                end
+                if matched_a_complete_pair then
+                    valid_closing_pairs_stack[idx] = d
+                end
+            end
+        else
+            -- Going inward, we might come across the same pairs again
+            -- Just check the state we saved on the way outward
+            if closing_pairs[which_context][d] and valid_closing_pairs_stack[idx] == d then
+                logger.info("AnkiNote#calculate_context_length()#parse_pairs() - matched closing pair", d, "(backwards)")
+                matched_a_complete_pair = true
+                valid_closing_pairs_stack[idx] = nil
+            end
+        end
+        if matched_a_complete_pair then
+            logger.info("AnkiNote#calculate_context_length()#parse_pairs() - matched a complete pair")
+        end
+        return matched_a_complete_pair
+    end
 
     local function calculate_single_step(delimiters, n, offset)
+        logger.info("AnkiNote#calculate_context_length()#calculate_single_step() - ", "n", n, "offset", offset)
         local direction_outward = n > 0    -- n > 0
-        local matched_a_complete_pair = false
         local idx = offset
         local len_incr = 1               -- whether to move forward (1) or backward (-1)
         if not direction_outward then
             len_incr = -1 -- for negative n we aim to reduce the context by n delimiters (not increase)
         end
+        local n_delims = 0
 
         for i = 1, math.abs(n) do
             matched_a_complete_pair = false
@@ -256,21 +361,34 @@ function AnkiNote:calculate_context_length(n_s, n_p, which_context, len_offset)
                 delim_offset = idx + len_incr
             end
             idx, d = self:get_pos_of_next_delim(delimiters, len_incr, which_context, delim_offset)
+            n_delims = i
+            -- smarter handling of pairs
+            matched_a_complete_pair = parse_pairs(d, idx, direction_outward)
             if (not direction_outward) and idx <= 0 then
                 -- we went backwards and reached the start of the context
-                -- stop here since nothing more is left to do (otherwise the function will be stuck in an endless loop)
+                -- stop here since nothing more is left to do
                 break
             end
             is_first_char = false
         end
-        -- if not (matched_a_complete_pair or is_normal_punctuation(self:get_context_at_char(idx))) then
-        --     idx = idx - 1
-        -- end
         return idx
     end
 
     len_context = calculate_single_step(sentence_delimiters, n_s, 0)  -- sentences
     len_context = calculate_single_step(part_of_sentence_delimiters, n_p, len_context)  -- parts of sentence
+
+    if len_context > 0 then
+        logger.info("AnkiNote#calculate_context_length() -", "matched_a_complete_pair", matched_a_complete_pair)
+        local final_delimiter = self:get_context_at_char(len_context, which_context)
+        if not (
+        matched_a_complete_pair
+        or (which_context == "next_context_table" and retain_trailing_delims[final_delimiter])
+        ) then
+            -- do not include final delimiter
+            logger.info("AnkiNote#calculate_context_length() - remove final delimiter", final_delimiter)
+            len_context = math.max(0, len_context - 1)
+        end
+    end
 
     assert(type(len_context) == "number")
     return len_context
@@ -311,15 +429,10 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
     logger.info("AnkiNote#get_custom_context():", pre_s, pre_p, pre_c, post_s, post_p, post_c)
 
     local whitespace_map = u.to_set(util.splitToChars(" 　〿\t\n"))
-    local retain_trailing_delims = u.to_set(util.splitToChars(self.conf.retained_trailing_delimiters:get_value()))
 
     -- calculate the length of the context that should be prepended to the lookupword
     local len_ctx_prev = self:calculate_context_length(pre_s, pre_p, "prev_context_table")
     logger.info("AnkiNote#get_custom_context() - len_ctx_prev", len_ctx_prev)
-    if len_ctx_prev > 0 then
-        -- do not include the leading delimiter we matched on
-        len_ctx_prev = len_ctx_prev - 1
-    end
     while len_ctx_prev > 0 do
         -- remove preceding whitespace, going from outward back inside
         -- Note: extract to function, for example trim_whitespace() (both pre and next)
