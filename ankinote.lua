@@ -148,24 +148,37 @@ function AnkiNote:get_context_of_length(n, which_context, offset)
     return content
 end
 
---[[
--- Finds and returns the absolute position of the n-th occurence of one of the characters specified by delim.
--- Also returns the delimiter that was matched
--- Searching for the 0-th occurrence returns 0, as does a search with negative n that does not yield a result.
--- @param len_offset: Offset for the start of the search (for example obtained from a previous call
--- to this function). It is applied in the direction of the search. 1-indexed like the position.
--- @param delim: A set with the delimiters that should be matched.
--- @param n: We want to look for the n-th occurance of delim. Can be negative for a backwards search
--- (useful in combination with len_offset).
--- @param which_context: Which context table to use. Either "prev_context_table" or "next_context_table".
--- For the previous context, the search is conducted backward (towards the left).
--- @return int, char
---]]
-function AnkiNote:init_delim_table(which_delim_table, n_s, n_p, n_c)
 
-    logger.info("AnkiNote#init_delim_table() -", "which_delim_table", which_delim_table)
+-- DEBUG
+local function dump(o)
+    if type(o) == 'table' then
+        local s = '{ '
+        for k,v in pairs(o) do
+            if type(k) ~= 'number' then k = '"'..k..'"' end
+            s = s .. '['..k..'] = ' .. dump(v) .. ','
+        end
+        return s .. '} '
+    else
+        return tostring(o)
+    end
+    end
+
+
+--[[
+-- initialize or extends the delimiter table so that it matches the position given by the parameters n_s, n_p.
+-- 
+-- @param n_s: The number of whole sentences. Has to be positive (>=0).
+-- @param n_p: The number of sentence parts. Can also be negative, though only positive values are really relevant.
+-- @param which_delim_table: Which delimiter table to use. Either "prev_delim_table" or "next_delim_table".
+--]]
+function AnkiNote:init_delim_table(which_delim_table, n_s, n_p)
+
+    logger.info("AnkiNote#init_delim_table() -", "which_delim_table", which_delim_table, "n_s", n_s, "n_p", n_p)
 
     assert(which_delim_table == "prev_delim_table" or which_delim_table == "next_delim_table")
+    assert(type(n_s) == "number")
+    assert(n_s >= 0)
+    assert(type(n_p) == "number")
 
     local sentence_delimiters = u.to_set(util.splitToChars(self.conf.sentence_delimiters:get_value()))
     local part_of_sentence_delimiters = u.to_set(util.splitToChars(self.conf.part_of_sentence_delimiters:get_value()))
@@ -204,20 +217,24 @@ function AnkiNote:init_delim_table(which_delim_table, n_s, n_p, n_c)
         which_context = "prev_context_table"
     end
     local idx = find_last_index() + 1
+    logger.info("AnkiNote#init_delim_table() -", "existing delimiter table covers", idx-1, "chars")
     local current_delimiter
 
     while not delim_table_sufficiently_large() do
-        local idx = idx + 1
+        idx = idx + 1
         local ch = self:get_context_at_char(idx, which_context)
         if part_of_sentence_delimiters[ch] or sentence_delimiters[ch] then
             -- we matched a delimiter
+            logger.info("AnkiNote#init_delim_table() -", "We matched a delimiter:", ch, "at idx", idx)
             if not current_delimiter then
                 current_delimiter = {}
                 current_delimiter.pos = idx
                 current_delimiter.final = idx
                 if part_of_sentence_delimiters[ch] then
+                    logger.info("AnkiNote#init_delim_table() -", "We matched a delimiter:", "new part delimiter mark")
                     current_delimiter.category = "sentence_part"
                 elseif sentence_delimiters[ch] then
+                    logger.info("AnkiNote#init_delim_table() -", "We matched a delimiter:", "new sentence delimiter mark")
                     current_delimiter.category = "sentence"
                 else
                     -- unknown identifier
@@ -226,10 +243,18 @@ function AnkiNote:init_delim_table(which_delim_table, n_s, n_p, n_c)
                 -- in case several delimiters appear directly next to each other, treat them like a
                 -- single delimiter while saving the position of the last one
                 current_delimiter.final = idx
+                logger.info("AnkiNote#init_delim_table() -", "We matched a delimiter:", "belongs to ", current_delimiter.pos, "-", current_delimiter.final)
+                -- In case of something like "foo bar,.", treat it like a sentence delimiter.
+                -- A possible case where you might think about doing something else could be if
+                -- paired delimiters are involved, for example "'Hello World', he said"
+                if current_delimiter.category == "sentence_part" and sentence_delimiters[ch] then
+                    current_delimiter.category = "sentence"
+                end
             end
         else
             if current_delimiter then
                 -- save delimiter to delimiter table
+                logger.info("AnkiNote#init_delim_table() -", "Continuing with normal text, saving last delimiter mark")
                 if current_delimiter.category == "sentence" then
                     -- add new sentence delimiter
                     table.insert(delimiters, current_delimiter)
@@ -244,6 +269,8 @@ function AnkiNote:init_delim_table(which_delim_table, n_s, n_p, n_c)
             end
         end
     end
+    logger.info("AnkiNote#init_delim_table() -", "Finished. New delim table covers", find_last_index(), "characters")
+    logger.info("AnkiNote#init_delim_table() -", dump(delimiters))
 end
 
 
@@ -263,81 +290,9 @@ end
 -- (that is, the returned value is absolute, not relative).
 --]]
 function AnkiNote:calculate_context_length(n_s, n_p, which_context, len_offset)
+    -- TODO: remove function
 
-    logger.info("AnkiNote#calculate_context_length() - ", "n_s", n_s, "n_p", n_p, "which_context", which_context, "len_offset", len_offset)
-
-    assert(type(n_s) == "number")
-    assert(n_s >= 0)
-    assert(type(n_p) == "number")
-
-
-    -- DEBUG
-    function dump(o)
-        if type(o) == 'table' then
-           local s = '{ '
-           for k,v in pairs(o) do
-              if type(k) ~= 'number' then k = '"'..k..'"' end
-              s = s .. '['..k..'] = ' .. dump(v) .. ','
-           end
-           return s .. '} '
-        else
-           return tostring(o)
-        end
-     end
-
-
-    -- Note: to implement any sort of smart behavior, I will probably have to go through delimiters one by one
-    -- implement as state machine
-    local sentence_delimiters = u.to_set(util.splitToChars(self.conf.sentence_delimiters:get_value()))
-    -- TODO: have the setting contain only the sentence part delimiters that are not already a sentence delimiter
-    local part_of_sentence_delimiters = u.to_set(util.splitToChars(self.conf.part_of_sentence_delimiters:get_value()))
-    -- paired delimiters are handled separately from this
     local retain_trailing_delims = u.to_set(util.splitToChars(self.conf.retained_trailing_delimiters:get_value()))
-
-    local len_context = len_offset
-    if not len_context then
-        len_context = 0
-    end
-    assert(type(len_context) == "number")
-    assert(len_context >= 0)
-    local is_first_char = true
-   
-    local function calculate_single_step(delimiters, n, offset)
-        logger.info("AnkiNote#calculate_context_length()#calculate_single_step() - ", "n", n, "offset", offset)
-        local direction_outward = n > 0    -- n > 0
-        local idx = offset
-        local len_incr = 1               -- whether to move forward (1) or backward (-1)
-        if not direction_outward then
-            len_incr = -1 -- for negative n we aim to reduce the context by n delimiters (not increase)
-        end
-        local n_delims = 0
-
-        for i = 1, math.abs(n) do
-            matched_a_complete_pair = false
-            local matching_pairs
-            local delim_offset
-            if is_first_char then
-                delim_offset = idx
-            else
-                --  ensure we do not count the same delimiter on which we stopped the last time
-                delim_offset = idx + len_incr
-            end
-            idx, matching_pairs = self:get_pos_of_next_delim(delimiters, len_incr, which_context, delim_offset)
-            n_delims = i
-            -- smarter handling of pairs
-            matched_a_complete_pair = parse_pairs(matching_pairs, idx, direction_outward)
-            if (not direction_outward) and idx <= 0 then
-                -- we went backwards and reached the start of the context
-                -- stop here since nothing more is left to do
-                break
-            end
-            is_first_char = false
-        end
-        return idx
-    end
-
-    len_context = calculate_single_step(sentence_delimiters, n_s, 0)  -- sentences
-    len_context = calculate_single_step(part_of_sentence_delimiters, n_p, len_context)  -- parts of sentence
 
     if len_context > 0 then
         local final_delimiter = self:get_context_at_char(len_context, which_context)
