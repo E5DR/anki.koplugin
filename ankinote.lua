@@ -161,42 +161,89 @@ end
 -- For the previous context, the search is conducted backward (towards the left).
 -- @return int, char
 --]]
-function AnkiNote:get_pos_of_next_delim(delim, n, which_context, offset)
+function AnkiNote:init_delim_table(which_delim_table, n_s, n_p, n_c)
 
-    logger.info("AnkiNote#get_pos_of_next_delim() - len_offset", offset, "n", n, "direction_prev", which_context)
+    logger.info("AnkiNote#init_delim_table() -", "which_delim_table", which_delim_table)
 
-    assert(type(offset) == "number")
-    assert(offset >= 0)
-    assert(type(n) == "number")
+    assert(which_delim_table == "prev_delim_table" or which_delim_table == "next_delim_table")
 
-    local idx = offset
-    local delims_matched = 0         -- number of the limiters that were matched so far
-    local len_incr = 1               -- whether we move forward or backward through the context table
-    if n < 0 then
-        -- for negative n we aim to reduce len_context by n delimiters (not increase)
-        len_incr = -1
+    local sentence_delimiters = u.to_set(util.splitToChars(self.conf.sentence_delimiters:get_value()))
+    local part_of_sentence_delimiters = u.to_set(util.splitToChars(self.conf.part_of_sentence_delimiters:get_value()))
+
+    if not self[which_delim_table] then
+        logger.info("AnkiNote#init_delim_table() -", "initializing delimiter table")
+        self[which_delim_table] = {}
+        -- insert a fake delimiter to mark the "zero sentences" position
+        -- sentence parts belonging to the first sentence are appended here
+        self[which_delim_table].pos = 0
+        self[which_delim_table].final = 0
     end
+    local delimiters = self[which_delim_table]
 
-    while delims_matched < math.abs(n) do
-        local next_idx = math.max(1, idx + len_incr)
-        local ch = self:get_context_at_char(next_idx, which_context)
-        if delim[ch] then
-            delims_matched = delims_matched + 1
-            logger.info("AnkiNote#get_pos_of_next_delim() - delimiter matched, count:", delims_matched)
+    local function delim_table_sufficiently_large()
+        -- TODO:
+    end
+    
+    -- figure out how much context the current delimiter table already covers
+    local function find_last_index()
+        local existing_table_length
+        local last_sentence_delim = delimiters[#delimiters]
+        if last_sentence_delim.sentence_parts and
+           last_sentence_delim.sentence_parts[#last_sentence_delim.sentence_parts].final > 0 then
+            existing_table_length = last_sentence_delim.sentence_parts[#last_sentence_delim.sentence_parts].final
+        else
+            existing_table_length = last_sentence_delim.final
         end
-        idx = next_idx
-        if len_incr < 0 and idx <= 1 then
-            -- we went backwards and reached the start of the context
-            -- stop here since nothing more is left to do (otherwise the function will be stuck in an endless loop)
-            break
+        return existing_table_length
+    end
+
+    local which_context
+    if which_delim_table == "next_delim_table" then
+        which_context = "next_context_table"
+    else
+        which_context = "prev_context_table"
+    end
+    local idx = find_last_index() + 1
+    local current_delimiter
+
+    while not delim_table_sufficiently_large() do
+        local idx = idx + 1
+        local ch = self:get_context_at_char(idx, which_context)
+        if part_of_sentence_delimiters[ch] or sentence_delimiters[ch] then
+            -- we matched a delimiter
+            if not current_delimiter then
+                current_delimiter = {}
+                current_delimiter.pos = idx
+                current_delimiter.final = idx
+                if part_of_sentence_delimiters[ch] then
+                    current_delimiter.category = "sentence_part"
+                elseif sentence_delimiters[ch] then
+                    current_delimiter.category = "sentence"
+                else
+                    -- unknown identifier
+                end
+            else
+                -- in case several delimiters appear directly next to each other, treat them like a
+                -- single delimiter while saving the position of the last one
+                current_delimiter.final = idx
+            end
+        else
+            if current_delimiter then
+                -- save delimiter to delimiter table
+                if current_delimiter.category == "sentence" then
+                    -- add new sentence delimiter
+                    table.insert(delimiters, current_delimiter)
+                else
+                    -- add new sentence part delimiter to last sentence
+                    if not delimiters.sentence_parts then
+                        delimiters[#delimiters].sentence_parts = {}
+                    end
+                    table.insert(delimiters[#delimiters].sentence_parts, current_delimiter)
+                end
+                current_delimiter = nil
+            end
         end
     end
-    assert(type(idx) == "number")
-    local ch
-    if idx > 0 then
-        ch = self:get_context_at_char(idx, which_context) -- Note: can we just reuse ch from the loop?
-    end
-    return idx, ch
 end
 
 
