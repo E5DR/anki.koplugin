@@ -149,19 +149,6 @@ function AnkiNote:get_context_of_length(n, which_context, offset)
 end
 
 
--- DEBUG
-local function dump(o)
-    if type(o) == 'table' then
-        local s = '{ '
-        for k,v in pairs(o) do
-            if type(k) ~= 'number' then k = '"'..k..'"' end
-            s = s .. '['..k..'] = ' .. dump(v) .. ','
-        end
-        return s .. '} '
-    else
-        return tostring(o)
-    end
-    end
 
 
 --[[
@@ -310,7 +297,7 @@ function AnkiNote:init_delim_table(which_delim_table, n_s, n_p)
         end
     end
     logger.info("AnkiNote#init_delim_table() -", "Finished. New delim table covers", find_last_index(), "characters")
-    logger.info("AnkiNote#init_delim_table() -", dump(delimiters))
+    logger.info("AnkiNote#init_delim_table() -", u.dump(delimiters))
 end
 
 
@@ -407,30 +394,28 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
         local matched_a_complete_pair = false
     
         -- We focus on japanese quotation marks for now, since there are too many different ways how quotation marks are used depending on language, culture and region.
-        local paired_delimiters = {{"「", "」"}, {"『", "』"}, {"（", "）"},
-                                    {"【", "】"}, { "(", ")" }, {"\"", "\""},
-                                    { "'", "'" },}
-        local opening = {}
-        local closing = {}
+        local paired_delimiters = {"「」", "『』", "（）", "【】", "()", "\"\"", "''"}
+        local opening_pairs = {}
+        local closing_pairs = {}
         for _, pair in ipairs(paired_delimiters) do
-            table.insert(opening, pair[1])
-            table.insert(closing, pair[2])
+            local chars = u.splitToChars(pair)
+            opening_pairs[chars[1]] = true
+            closing_pairs[chars[2]] = true
         end
-        local opening_pairs = u.to_set(opening)
-        local closing_pairs = u.to_set(closing)
         logger.info("AnkiNote#calculate_context_length()#parse_pairs() - ", "opening_pairs")
-        logger.info(dump(opening_pairs))
+        logger.info(u.dump(opening_pairs))
         logger.info("AnkiNote#calculate_context_length()#parse_pairs() - ", "closing_pairs")
-        logger.info(dump(closing_pairs))
+        logger.info(u.dump(closing_pairs))
         -- create a table so that you can find the matching partners to a paired delimiter
         -- example: matching_pairs["("] == ")"
         local matching_pairs = {}
         for i, pair in pairs(paired_delimiters) do
-            matching_pairs[pair[1]] = pair[2]
-            matching_pairs[pair[2]] = pair[1]
+            local chars = u.splitToChars(pair)
+            matching_pairs[chars[1]] = chars[2]
+            matching_pairs[chars[2]] = chars[1]
         end
         logger.info("AnkiNote#calculate_context_length()#parse_pairs() - ", "matching_pairs")
-        logger.info(dump(matching_pairs))
+        logger.info(u.dump(matching_pairs))
 
         -- might use util.arrayAppend(t1, t2)
         -- TODO: create an iterator all_delimiter_chars() that iterates through all delimiters
@@ -444,7 +429,7 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
             if opening_pairs[matching_pairs] then
                 logger.info("AnkiNote#calculate_context_length()#parse_pairs() - matched opening pair", matching_pairs)
                 table.insert(opening_pairs_stack, {idx=i, char=matching_pairs})
-                logger.info(dump(opening_pairs_stack))
+                logger.info(u.dump(opening_pairs_stack))
             elseif closing_pairs[matching_pairs] then
                 -- Checks if matching_pairs is a valid closing pair.
                 -- Considers the case of mismatching pairs like (([)), in this case
