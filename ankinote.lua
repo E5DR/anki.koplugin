@@ -149,7 +149,47 @@ function AnkiNote:get_context_of_length(n, which_context, offset)
 end
 
 
+-- Returns the delimiter marked by the position n_s, n_p.
+-- The delimiter contains a position range and might mark multiple consecutive characters.
+-- Any position that would result in a negative length is assumed to be n_s=0, n_p=0.
+-- Returns nil if the delimiter table is not large enough and the position lies outside.
+function AnkiNote:get_delim_from_table(n_s, n_p, which_delim_table)
 
+    logger.info("AnkiNote#get_delim_from_table() -", "n_s", n_s, "n_p", n_p, "which_delim_table", which_delim_table)
+
+    assert(which_delim_table == "prev_delim_table" or which_delim_table == "next_delim_table")
+    assert(type(n_s) == "number")
+    assert(n_s >= 0)
+    assert(type(n_p) == "number")
+
+    local delim_idx = -1
+    -- determine sentence position
+    -- needs to match since even with a negative n_p, we need to know where to count backwards from
+    local sentence_count = 0
+    for i, delim in ipairs(self[which_delim_table]) do
+        -- reminder: the first sentence delimiter saved is "delimiter 0" and corresponds to n_s=0
+        if delim.category == "sentence" then
+            sentence_count = sentence_count + 1
+            if sentence_count > n_s then
+                delim_idx = i
+                break
+            end
+        end
+    end
+    -- determine part-of-sentence position
+    if delim_idx and n_p ~= 0 then
+        delim_idx = math.max(0, delim_idx + n_p)
+        if delim_idx > #self[which_delim_table] then
+            -- position is outside
+            delim_idx = -1
+        end
+    end
+    if delim_idx >= 1 then
+        return self[which_delim_table][delim_idx]
+    else
+        return nil
+    end
+end
 
 --[[
 -- initializes or extends the delimiter table so that it matches the position given by
@@ -161,9 +201,9 @@ end
 -- @param n_p: The number of sentence parts. Can also be negative, though only positive
 -- values are really relevant.
 --]]
-function AnkiNote:init_delim_table(which_delim_table, n_s, n_p)
+function AnkiNote:init_delim_table(n_s, n_p, which_delim_table)
 
-    logger.info("AnkiNote#init_delim_table() -", "which_delim_table", which_delim_table, "n_s", n_s, "n_p", n_p)
+    logger.info("AnkiNote#init_delim_table() -", "n_s", n_s, "n_p", n_p, "which_delim_table", which_delim_table)
 
     assert(which_delim_table == "prev_delim_table" or which_delim_table == "next_delim_table")
     assert(type(n_s) == "number")
@@ -183,59 +223,11 @@ function AnkiNote:init_delim_table(which_delim_table, n_s, n_p)
     end
     local delimiters = self[which_delim_table]
 
-    -- determine whether the delimiter table contains the delimiter at the given
-    -- position and is therefore sufficiently large
-    local function delim_table_sufficiently_large(n_s, n_p)
-        -- TODO: turn this into function that returns the absolute index / the character itself if it is contained, and nil if we fail.
-        -- This would be more of an internal function, since the real function is expected to automatically extend the table if necessary
-        -- actually, if you always call init_delim_table beforehand, we can be sure the size fits.
-        local contains_delimiter = false
-        -- ensure enough sentence delimiters are available
-        -- even with a negative n_p, we need to know where to count backwards from
-        contains_delimiter = #delimiters >= n_s + 1 -- the first sentence delimiter saved is "delimiter 0" and does not count
-        -- check for sufficient number of parts
-        if contains_delimiter and n_p ~= 0 then
-            if n_p > 0 then
-                -- start counting all delimiters (parts and whole sentences) that come after n_s
-                local count = 0
-                local sentence_idx = n_s
-                while count < n_p do
-                    if sentence_idx > #delimiters then
-                        -- we reached the end of the delimiter table and and have not yet reached n_p
-                        contains_delimiter = false
-                        break
-                    end
-                    -- count sentence delimiter sentence_idx
-                    count = count + 1
-                    -- count sentence parts belonging to sentence_idx
-                    if delimiters[sentence_idx].parts then
-                        count = count + #delimiters[sentence_idx].parts
-                    end
-                    if count >= n_p then
-                        contains_delimiter = true
-                        break
-                    end
-                    sentence_idx = sentence_idx + 1
-                end
-            else
-                -- TODO: implement
-            end
-        end
-        return contains_delimiter
-    end
-    
     -- figure out how much context the current delimiter table already covers
-    local function find_last_index()
-        local existing_table_length
-        local last_sentence_delim = delimiters[#delimiters]
-        if last_sentence_delim.sentence_parts and
-           last_sentence_delim.sentence_parts[#last_sentence_delim.sentence_parts].final > 0 then
-            existing_table_length = last_sentence_delim.sentence_parts[#last_sentence_delim.sentence_parts].final
-        else
-            existing_table_length = last_sentence_delim.final
-        end
-        return existing_table_length
-    end
+    -- Note: Actually, there might be more text following behind the final delimiter in our table
+    -- which we do not know about since we only save the delimiters
+    local idx = delimiters[#delimiters].final + 1
+    logger.info("AnkiNote#init_delim_table() -", "existing delimiter table covers", idx-1, "chars")
 
     local which_context
     if which_delim_table == "next_delim_table" then
@@ -243,11 +235,9 @@ function AnkiNote:init_delim_table(which_delim_table, n_s, n_p)
     else
         which_context = "prev_context_table"
     end
-    local idx = find_last_index() + 1
-    logger.info("AnkiNote#init_delim_table() -", "existing delimiter table covers", idx-1, "chars")
     local current_delimiter
 
-    while not delim_table_sufficiently_large() do
+    while not self:get_delim_from_table(n_s, n_p, which_delim_table) do
         idx = idx + 1
         local ch = self:get_context_at_char(idx, which_context)
         if part_of_sentence_delimiters[ch] or sentence_delimiters[ch] then
@@ -282,16 +272,7 @@ function AnkiNote:init_delim_table(which_delim_table, n_s, n_p)
             if current_delimiter then
                 -- save delimiter to delimiter table
                 logger.info("AnkiNote#init_delim_table() -", "Continuing with normal text, saving last delimiter mark")
-                if current_delimiter.category == "sentence" then
-                    -- add new sentence delimiter
-                    table.insert(delimiters, current_delimiter)
-                else
-                    -- add new sentence part delimiter to last sentence
-                    if not delimiters.sentence_parts then
-                        delimiters[#delimiters].sentence_parts = {}
-                    end
-                    table.insert(delimiters[#delimiters].sentence_parts, current_delimiter)
-                end
+                table.insert(delimiters, current_delimiter)
                 current_delimiter = nil
             end
         end
@@ -398,7 +379,8 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
         local opening_pairs = {}
         local closing_pairs = {}
         for _, pair in ipairs(paired_delimiters) do
-            local chars = u.splitToChars(pair)
+            -- how do I reference these utils best?
+            local chars = require("frontend/util").splitToChars(pair)
             opening_pairs[chars[1]] = true
             closing_pairs[chars[2]] = true
         end
