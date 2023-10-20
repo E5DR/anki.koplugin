@@ -39,7 +39,7 @@ local Config = {
     ConfigOpt:new{ id = 'custom_context_jump_size',         default = 8 },
     ConfigOpt:new{ id = 'custom_context_peek_length',       default = 10 },
     ConfigOpt:new{ id = 'sentence_delimiters',              default = "「」『』（）【】。！？().?!\"'" },
-    ConfigOpt:new{ id = 'part_of_sentence_delimiters',      default = "「」『』（）【】、。！？().?!,\"'" },
+    ConfigOpt:new{ id = 'part_of_sentence_delimiters',      default = "、," },
     ConfigOpt:new{ id = 'retained_trailing_delimiters',     default = "、。！？.?!," },
     ConfigOpt:new{ id = 'context_field' },
     ConfigOpt:new{ id = 'meta_field' },

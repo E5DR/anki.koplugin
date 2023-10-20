@@ -40,7 +40,7 @@ local Config = {
     -- Punctuation that is used to split sentences (holding the << and >> buttons)
     -- sentence_delimiters = "「」『』（）【】。！？().?!\"'",
     -- Punctuation that is used to split parts of a sentence (<< and >> buttons)
-    -- part_of_sentence_delimiters = "「」『』（）【】、。！？().?!,\"'",
+    -- part_of_sentence_delimiters = "、,",
     -- Which trailing delimiters should be retained at the end of the context
     -- retained_trailing_delimiters = "、。！？.?!,",
 

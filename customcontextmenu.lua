@@ -120,7 +120,7 @@ function CustomContextMenu:init()
             -- Note: what about larger increments (currently not the case)? Will be eaten currently
             update({ prev_c = 0, prev_p = 0})
         else
-            update({ prev_c = 0, prev_p = 0, prev_s = self.prev_s_cnt + inc})
+            update({ prev_c = 0, prev_p = 0, prev_s = math.max(0, self.prev_s_cnt + inc)})
         end
     end
 
@@ -138,7 +138,7 @@ function CustomContextMenu:init()
             -- Note: what about larger increments (currently not the case)? Will be eaten currently
             update({ next_c = 0, next_p = 0})
         else
-            update({ next_c = 0, next_p = 0, next_s = self.next_s_cnt + inc})
+            update({ next_c = 0, next_p = 0, next_s = math.max(0, self.next_s_cnt + inc)})
         end
     end
 
