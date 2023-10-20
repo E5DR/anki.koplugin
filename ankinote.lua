@@ -236,9 +236,14 @@ function AnkiNote:init_delim_table(n_s, n_p, which_delim_table)
         which_context = "prev_context_table"
     end
     local current_delimiter
+    if idx <= 1 then
+        -- prepare initial delimiter marking the beginning of the context (context length 0)
+        current_delimiter = {}
+        current_delimiter.pos = 1
+        current_delimiter.final = 0
+    end
 
     while not self:get_delim_from_table(n_s, n_p, which_delim_table) do
-        idx = idx + 1
         local ch = self:get_context_at_char(idx, which_context)
         if part_of_sentence_delimiters[ch] or sentence_delimiters[ch] then
             -- we matched a delimiter
@@ -276,8 +281,9 @@ function AnkiNote:init_delim_table(n_s, n_p, which_delim_table)
                 current_delimiter = nil
             end
         end
+        idx = idx + 1
     end
-    logger.info("AnkiNote#init_delim_table() -", "Finished. New delim table covers", find_last_index(), "characters")
+    logger.info("AnkiNote#init_delim_table() -", "Finished. New delim table covers at least", delimiters[#delimiters].final, "characters")
     logger.info("AnkiNote#init_delim_table() -", u.dump(delimiters))
 end
 
@@ -324,6 +330,28 @@ end
 -- @return: n_s_optimal, n_p_optimal
 --]]
 function AnkiNote:optimize_position(n_s, n_p, which_context, len_offset)
+-- TODO: implement
+end
+
+--[[
+-- Returns a new set of s, p, c positions after moving by s_inc, p_inc, c_inc from current_position.
+-- @param current_position: The current position (context length) including all adjustments and offsets.
+-- @param s_inc: The number of whole sentences to move .
+-- @param p_inc: The number of sentence parts.
+-- @param c_inc: The number of characters for manual adjustment.
+-- @param which_context: Which context table to use. Either "prev_context_table" or "next_context_table".
+-- @return: new_s, new_p, new_c
+--]]
+-- Note: This might completely make obsolete the need to save a position as s, p, c?
+-- just save current_position and get returned a new current_position whenever you apply some adjustments
+-- default position is current_position + adjustments for the initial position
+function AnkiNote:smart_increment(current_position, s_inc, p_inc, c_inc, which_context)
+-- start at current_position
+-- find s sentence delims to left/right
+-- find p part delims from there
+-- adjust by c chars
+-- check delim table at new absolute char position
+-- find new_s, new_p, new_c for new position
 -- TODO: implement
 end
 
@@ -437,15 +465,17 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
         
         -- TODO: modify len_prev, len_next
         if len_context > 0 then
-        logger.info("AnkiNote#calculate_context_length() -", "matched_a_complete_pair", matched_a_complete_pair)
-        if not matched_a_complete_pair then
-            len_context = math.max(0, len_context - 1)
+            logger.info("AnkiNote#calculate_context_length() -", "matched_a_complete_pair", matched_a_complete_pair)
+            if not matched_a_complete_pair then
+                len_context = math.max(0, len_context - 1)
+            end
         end
 
         return len_prev, len_next
     end
 
 
+    -- TODO: use delimiter table
     -- calculate basic context length to s,p position without adjustments
     -- final matched delimiter is not included
     local len_prev = self:calculate_context_length(pre_s, pre_p, "prev_context_table")
@@ -453,6 +483,7 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
     logger.info("AnkiNote#get_custom_context() -", "len_prev", len_prev, "len_next", len_next, "(without adjustments)")
 
     -- apply adjustments for smart behavior
+    -- TODO: use new delimiter format
     len_prev, len_next = allowed_trailing_delimiters(len_prev, len_next) -- remove all non-paired delims that are not allowed
     len_prev, len_next = trim_whitespace(len_prev, len_next)
     len_prev, len_next = smart_paired_delimiters(len_prev, len_next) -- remove paired delims that do not have a match, auto-extend beyond a trailing "normal delimiter"
