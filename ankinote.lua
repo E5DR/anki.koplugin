@@ -165,11 +165,14 @@ local function dump(o)
 
 
 --[[
--- initialize or extends the delimiter table so that it matches the position given by the parameters n_s, n_p.
+-- initializes or extends the delimiter table so that it matches the position given by
+-- the parameters n_s, n_p.
 -- 
+-- @param which_delim_table: Which delimiter table to use. Either "prev_delim_table" or
+-- "next_delim_table".
 -- @param n_s: The number of whole sentences. Has to be positive (>=0).
--- @param n_p: The number of sentence parts. Can also be negative, though only positive values are really relevant.
--- @param which_delim_table: Which delimiter table to use. Either "prev_delim_table" or "next_delim_table".
+-- @param n_p: The number of sentence parts. Can also be negative, though only positive
+-- values are really relevant.
 --]]
 function AnkiNote:init_delim_table(which_delim_table, n_s, n_p)
 
@@ -193,8 +196,45 @@ function AnkiNote:init_delim_table(which_delim_table, n_s, n_p)
     end
     local delimiters = self[which_delim_table]
 
-    local function delim_table_sufficiently_large()
-        -- TODO:
+    -- determine whether the delimiter table contains the delimiter at the given
+    -- position and is therefore sufficiently large
+    local function delim_table_sufficiently_large(n_s, n_p)
+        -- TODO: turn this into function that returns the absolute index / the character itself if it is contained, and nil if we fail.
+        -- This would be more of an internal function, since the real function is expected to automatically extend the table if necessary
+        -- actually, if you always call init_delim_table beforehand, we can be sure the size fits.
+        local contains_delimiter = false
+        -- ensure enough sentence delimiters are available
+        -- even with a negative n_p, we need to know where to count backwards from
+        contains_delimiter = #delimiters >= n_s + 1 -- the first sentence delimiter saved is "delimiter 0" and does not count
+        -- check for sufficient number of parts
+        if contains_delimiter and n_p ~= 0 then
+            if n_p > 0 then
+                -- start counting all delimiters (parts and whole sentences) that come after n_s
+                local count = 0
+                local sentence_idx = n_s
+                while count < n_p do
+                    if sentence_idx > #delimiters then
+                        -- we reached the end of the delimiter table and and have not yet reached n_p
+                        contains_delimiter = false
+                        break
+                    end
+                    -- count sentence delimiter sentence_idx
+                    count = count + 1
+                    -- count sentence parts belonging to sentence_idx
+                    if delimiters[sentence_idx].parts then
+                        count = count + #delimiters[sentence_idx].parts
+                    end
+                    if count >= n_p then
+                        contains_delimiter = true
+                        break
+                    end
+                    sentence_idx = sentence_idx + 1
+                end
+            else
+                -- TODO: implement
+            end
+        end
+        return contains_delimiter
     end
     
     -- figure out how much context the current delimiter table already covers
@@ -392,21 +432,14 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
         logger.info("AnkiNote#calculate_context_length()#parse_pairs() - ", "matching_pairs")
         logger.info(dump(matching_pairs))
 
-        local adj_len_prev = len_prev
-        local adj_len_next = len_next
-        local complete_context = create_complete_context(len_prev, len_next)
-        -- check for adjacent paired delimiters and include them
-        while opening_pairs[self:get_context_at_char(adj_len_prev + 1, "prev_context_table")] do
-            adj_len_prev = adj_len_prev + 1
-        end
-        while closing_pairs[self:get_context_at_char(adj_len_next + 1, "next_context_table")] do
-            adj_len_next = adj_len_next + 1
-        end
-        -- We do not need to check for the size of the context table since that was already done when calling get_context_at_char()
+        -- might use util.arrayAppend(t1, t2)
+        -- TODO: create an iterator all_delimiter_chars() that iterates through all delimiters
+        -- in the given range
+
         -- TODO: get and join (as table)
     
         -- TODO:
-        for i, ch in ipairs(complete_context) do
+        for ch in all_delimiter_chars(delim_pre, delim_next) do
             local matched_a_complete_pair = false
             if opening_pairs[matching_pairs] then
                 logger.info("AnkiNote#calculate_context_length()#parse_pairs() - matched opening pair", matching_pairs)
