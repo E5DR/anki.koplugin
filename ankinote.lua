@@ -157,12 +157,13 @@ end
 -- to ensure a succesfull lookup.
 -- @param n_s: The number of whole sentences. Has to be positive (>=0).
 -- @param n_p: The number of sentence parts. Can also be negative, for any
--- position that would result in a negative length "delimiter 0" is selected (no
--- context).
+-- position that would result in a negative length no context is assumed.
 -- @param which_delim_table: Which delimiter table to use. Either
 -- "prev_delim_table" or "next_delim_table".
 -- @return: index to the table entry containing the delimiter information.
--- An index of 0 means that the delimiter table is not large enough and the
+-- An index of 0 means that no delimiter was selected (position s=p=0, or a
+-- negative position).
+-- An index of -1 means that the delimiter table is not large enough and the
 -- position lies outside.
 --]]
 function AnkiNote:find_delim_from_position(n_s, n_p, which_delim_table)
@@ -174,15 +175,14 @@ function AnkiNote:find_delim_from_position(n_s, n_p, which_delim_table)
     assert(n_s >= 0)
     assert(type(n_p) == "number")
 
-    local delim_idx = 0  -- invalid index = not found
+    local delim_idx = -1  -- invalid position
     -- determine sentence position
     -- needs to match since even with a negative n_p, we need to know where to count backwards from
     local sentence_count = 0
     if n_s <= 0 then
-        delim_idx = 1 -- we can go no further inside than "matched_word" delimiter (always exists)
+        delim_idx = 0 -- delimiter index 0 means "no context" / the position points to the edge of the matched word
     else
         for i, delim in ipairs(self[which_delim_table]) do
-            -- Reminder: While the the first entry into the delimiter table might also contain punctuation, it is always marked as "matched_word", never as "sentence". Corresponds to n_s=0
             if delim.category == "sentence" then
                 sentence_count = sentence_count + 1
                 if sentence_count >= n_s then
@@ -191,13 +191,17 @@ function AnkiNote:find_delim_from_position(n_s, n_p, which_delim_table)
                 end
             end
         end
+        if sentence_count < n_s then
+            -- the delimiter table does not contain n_s sentence delimiters
+            delim_idx = -1
+        end
     end
     -- determine part-of-sentence position
     if delim_idx and n_p ~= 0 then
-        delim_idx = math.max(1, delim_idx + n_p)
+        delim_idx = math.max(0, delim_idx + n_p)
         if delim_idx > #self[which_delim_table] then
             -- position is outside
-            delim_idx = 0
+            delim_idx = -1
         end
     end
     return delim_idx
@@ -225,19 +229,13 @@ function AnkiNote:init_delim_table(n_s, n_p, which_delim_table)
     -- characters) is decided by a later step.
     --
     -- The format of the delimiter table is:
-    -- `{delimiter_zero, delimiter, delimiter, ...}`
+    -- `{delimiter, delimiter, ...}`
     -- with a single delimiter being a table `{start, stop, category}`.
     --
     -- * Both `start and stop` are inclusive and mark the absolute position of
     -- the first / last delimiting character in that delimiter (as could be
     -- given to get_context_at_char()).
     -- * `category` marks a delimiter as either "sentence" or "sentence_part".
-    -- * The start of the context (context length zero) is treated like its own
-    -- delimiter and is always present as first entry in the delimiter table
-    -- ("matched_word)".  If the context starts with one or more delimiting
-    -- characters, this delimiter is expanded to include these.  This is because
-    -- otherwise a position of s/p = 0 might be effectively identical to s/p = 1,
-    -- which would require two button presses to pass.
 
 
     logger.info("AnkiNote#init_delim_table() -", "n_s", n_s, "n_p", n_p, "which_delim_table", which_delim_table)
@@ -274,16 +272,9 @@ function AnkiNote:init_delim_table(n_s, n_p, which_delim_table)
         which_context = "prev_context_table"
     end
     local current_delimiter
-    if idx <= 1 then
-        -- prepare initial delimiter marking the beginning of the context (context length 0)
-        current_delimiter = {}
-        current_delimiter.start = 1
-        current_delimiter.stop = 0 -- this is effectively a range of length zero, but might be expanded if the context starts with delimiting characters
-        current_delimiter.category = "matched_word" -- first delimiter does not count as "sentence" delimiter even if it  contains some delimiting characters. 
-    end
 
     -- extend delimiter table until it reaches the specified position
-    while self:find_delim_from_position(n_s, n_p, which_delim_table) < 1 do
+    while self:find_delim_from_position(n_s, n_p, which_delim_table) < 0 do
         local ch = self:get_context_at_char(idx, which_context)
         if part_of_sentence_delimiters[ch] or sentence_delimiters[ch] then
             -- we matched a delimiter
@@ -323,7 +314,11 @@ function AnkiNote:init_delim_table(n_s, n_p, which_delim_table)
         end
         idx = idx + 1
     end
-    logger.info("AnkiNote#init_delim_table() -", "Finished. New delim table", which_delim_table, "covers", delimiters[#delimiters].stop, "characters")
+    if #delimiters >= 1 then
+        logger.info("AnkiNote#init_delim_table() -", "Finished. New delim table", which_delim_table, "covers", delimiters[#delimiters].stop, "characters")
+    else
+        logger.info("AnkiNote#init_delim_table() -", "Finished. New delim table is empty")
+    end
     logger.info("AnkiNote#init_delim_table() -", u.dump(delimiters))
 end
 
@@ -347,13 +342,18 @@ end
 
 function AnkiNote:all_delimiter_chars(idx_delim_prev, idx_delim_next)
     -- check limits of delim table
-    assert(idx_delim_prev <= #self.prev_delim_table and idx_delim_prev >= 1)
-    assert(idx_delim_next <= #self.next_context_table and idx_delim_next >= 1)
+    assert(idx_delim_prev <= #self.prev_delim_table and idx_delim_prev >= 0)
+    assert(idx_delim_next <= #self.next_context_table and idx_delim_next >= 0)
 
     -- start with outermost delimiting character of the previous context (= on the very left)
     local direction_inward = true
     local delim_idx = idx_delim_prev
     local delim_char_offset = 0
+    if idx_delim_prev < 1 then
+        -- start with trailing context
+        direction_inward = false
+        delim_idx = 1
+    end
 
     local function iterate()
         local which_delim_table
@@ -372,19 +372,6 @@ function AnkiNote:all_delimiter_chars(idx_delim_prev, idx_delim_next)
         -- check if we are finished
         if (not direction_inward) and delim_idx > idx_delim_next then
             return nil
-        end
-        -- skip the first delimiter if it does not contain any delimiting characters
-        if delim_idx == 1 and self[which_delim_table][delim_idx].stop == 0 then
-            -- logger.info("AnkiNote#calculate_context_length()#all_delimiter_chars()#iterator() - ", "recurse", which_delim_table, which_context, "delim_char_offset", delim_char_offset, "delim_idx", delim_idx)
-            if direction_inward then
-                -- move to first delimiter of trailing context
-                direction_inward = false
-            else
-                -- move to next delimiter
-                delim_idx = delim_idx + incr
-            end
-            -- recursion will be at most two calls deep since there are only two first delimiters
-            return iterate()
         end
         -- get current character info
         local ctx_len
@@ -503,11 +490,12 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
     local function include_trailing_punctuation(idx_delim_prev, idx_delim_next, len_prev, len_next)
         logger.info("AnkiNote#calculate_context_length()#include_trailing_punctuation() - ", idx_delim_prev, idx_delim_next, len_prev, len_next)
         local retain_trailing_delims = u.to_set(util.splitToChars(self.conf.retained_trailing_delimiters:get_value()))
-        -- do not include preceding punctuation
         -- include trailing punctuation that is specified in the setting
-        while len_next + 1 <= self.next_delim_table[idx_delim_next].stop and
-            retain_trailing_delims[self:get_context_at_char(len_next + 1, "next_context_table")] do
-            len_next = len_next + 1
+        if idx_delim_next > 0 then
+            while len_next + 1 <= self.next_delim_table[idx_delim_next].stop and
+                retain_trailing_delims[self:get_context_at_char(len_next + 1, "next_context_table")] do
+                len_next = len_next + 1
+            end
         end
         return len_prev, len_next
     end
@@ -614,7 +602,6 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
     end
 
 
-    -- TODO: use delimiter table
     -- calculate basic context length to s,p position without adjustments
     -- final matched delimiter is not included
     self:init_delim_table(pre_s, pre_p, "prev_delim_table")
@@ -623,13 +610,19 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
     local delim_next = self:find_delim_from_position(post_s, post_p, "next_delim_table")
     logger.info("AnkiNote#get_custom_context() -", "delim_prev", delim_prev, "delim_next", delim_next)
 
-    -- apply adjustments for smart behavior
-    -- TODO: use new delimiter format
+    -- start with no delimiting characters included
+    local len_prev = 0
+    local len_next = 0
+    if delim_prev > 0 then
+        len_prev = self.prev_delim_table[delim_prev].start - 1
+    end
+    if delim_next > 0 then
+        len_next = self.next_delim_table[delim_next].start - 1
+    end
     
-    local len_prev = self.prev_delim_table[delim_prev].start - 1 -- start with no delimiting characters included
-    local len_next = self.next_delim_table[delim_next].start - 1 -- start with no delimiting characters included
-    len_prev, len_next = smart_paired_delimiters(delim_prev, delim_next, len_prev, len_next) -- remove paired delims that do not have a match, auto-extend beyond a trailing "normal delimiter"
-    len_prev, len_next = include_trailing_punctuation(delim_prev, delim_next, len_prev, len_next) -- remove all non-paired delims that are not allowed
+    -- apply adjustments for smart behavior
+    len_prev, len_next = smart_paired_delimiters(delim_prev, delim_next, len_prev, len_next)
+    len_prev, len_next = include_trailing_punctuation(delim_prev, delim_next, len_prev, len_next)
     len_prev, len_next = trim_whitespace(delim_prev, delim_next, len_prev, len_next)
     logger.info("AnkiNote#get_custom_context() -", "len_prev", len_prev, "len_next", len_next, "(after applying adjustments)")
 
