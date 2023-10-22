@@ -420,39 +420,6 @@ function AnkiNote:all_delimiter_chars(idx_delim_prev, idx_delim_next)
 end
 
 --[[
--- Converts the position of a character in the context from one marked by a number of sentences and
--- sentence parts into an absolute position counted in number of characters (inclusive).
--- @param n_s: The number of whole sentences to match. Has to be positive (>=0).
--- @param n_p: The number of sentence parts to match. Can also be negative (for example 2 sentences
--- and one sentence part back from there).
--- @param which_context: Which context table to use. Either "prev_context_table" or "next_context_table".
--- For the previous context, the search is conducted backward (towards the left).
--- @param len_offset: Offset for the start of the search (for example obtained from a previous call
--- to this function). It is applied in the direction of the search and included in the returned value
--- (since that is absolute). Optional (default value: 0).
--- @return: int
--- A length of 0 means "no context", 1 is "one character of context" and so forth.
--- (that is, the returned value is absolute, not relative).
---]]
-function AnkiNote:calculate_context_length(n_s, n_p, which_context, len_offset)
-    -- TODO: remove function
-
-    local retain_trailing_delims = u.to_set(util.splitToChars(self.conf.retained_trailing_delimiters:get_value()))
-
-    if len_context > 0 then
-        local final_delimiter = self:get_context_at_char(len_context, which_context)
-        -- do not include final delimiter
-        logger.info("AnkiNote#calculate_context_length() - remove final delimiter", final_delimiter)
-        len_context = math.max(0, len_context - 1)
-    end
-
-    assert(type(len_context) == "number")
-    return len_context
-end
-
-
-
---[[
 -- Returns the optimal way a position can be reached.
 -- For example, n_s=0 n_p=5 could be better described as n_s=2 n_p=1.
 -- @param n_s: The number of whole sentences. Has to be positive (>=0).
@@ -525,8 +492,23 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
         return len_prev, len_next
     end
 
-    local function allowed_trailing_delimiters(idx_delim_prev, idx_delim_next, len_prev, len_next)
-        -- TODO:
+    --[[
+    -- Adjusts the context outwards to ensure it includes trailing punctuation.
+    -- @param idx_delim_prev: Index of the delimiter for the previous context.
+    -- @param idx_delim_next: Index of the delimiter for the next context.
+    -- @param len_prev: Length of previous context before this adjustment.
+    -- @param len_next: Length of next context before this adjustment.
+    -- @return Adjusted values len_prev, len_next
+    --]]
+    local function include_trailing_punctuation(idx_delim_prev, idx_delim_next, len_prev, len_next)
+        logger.info("AnkiNote#calculate_context_length()#include_trailing_punctuation() - ", idx_delim_prev, idx_delim_next, len_prev, len_next)
+        local retain_trailing_delims = u.to_set(util.splitToChars(self.conf.retained_trailing_delimiters:get_value()))
+        -- do not include preceding punctuation
+        -- include trailing punctuation that is specified in the setting
+        while len_next + 1 <= self.next_delim_table[idx_delim_next].stop and
+            retain_trailing_delims[self:get_context_at_char(len_next + 1, "next_context_table")] do
+            len_next = len_next + 1
+        end
         return len_prev, len_next
     end
 
@@ -647,7 +629,7 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
     local len_prev = self.prev_delim_table[delim_prev].start - 1 -- start with no delimiting characters included
     local len_next = self.next_delim_table[delim_next].start - 1 -- start with no delimiting characters included
     len_prev, len_next = smart_paired_delimiters(delim_prev, delim_next, len_prev, len_next) -- remove paired delims that do not have a match, auto-extend beyond a trailing "normal delimiter"
-    len_prev, len_next = allowed_trailing_delimiters(delim_prev, delim_next, len_prev, len_next) -- remove all non-paired delims that are not allowed
+    len_prev, len_next = include_trailing_punctuation(delim_prev, delim_next, len_prev, len_next) -- remove all non-paired delims that are not allowed
     len_prev, len_next = trim_whitespace(delim_prev, delim_next, len_prev, len_next)
     logger.info("AnkiNote#get_custom_context() -", "len_prev", len_prev, "len_next", len_next, "(after applying adjustments)")
 
