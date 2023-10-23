@@ -76,11 +76,11 @@ end
 -- Applies safety checks and automatically expands the context table if necessary.
 -- @param n: Which char to return, counted starting from the lookupword, beginning
 -- at one (so the first char is char 1).
--- @param which_context: Which context table to use. Either "prev_context_table" or
--- "next_context_table". For the previous context, n is applied backward (towards the left).
+-- @param which_context: Which context table to use. Either "prev" org"next".
+-- For the previous context, n is applied backward (towards the left).
 --]]
 function AnkiNote:get_context_at_char(n, which_context)
-    --                backwards     forwards  
+    --                   prev          next  
     -- idx:           ---->x        -->x      
     --                cccccccccwwwwwcccccccccc
     -- n:                  x<--     -->x      
@@ -88,30 +88,30 @@ function AnkiNote:get_context_at_char(n, which_context)
 
     assert(type(n) == "number")
     assert(n >= 1)
-    assert(which_context == "prev_context_table" or which_context == "next_context_table")
+    assert(which_context == "prev" or which_context == "next")
 
     local idx -- corresponding index in the context_table (differs from n when going backwards)
     local ch
-    if #self[which_context] < n then self:expand_content() end
-    if which_context == "prev_context_table" then
-        idx = #self[which_context] - (n - 1) -- one-indexing is not applicable when accessing backwards
+    if #self.context_table[which_context] < n then self:expand_content() end
+    if which_context == "prev" then
+        idx = #self.context_table[which_context] - (n - 1) -- one-indexing is not applicable when accessing backwards
     else
         idx = n  -- in context characters are counted from one and the same goes for lua tables, everything is fine
     end
-    ch = self[which_context][idx]
+    ch = self.context_table[which_context][idx]
     logger.info("AnkiNote#get_context_at_char() - n", n, "ch", ch, "idx", idx, which_context)
-    assert(ch ~= nil, ("Something went wrong when parsing context! idx: %d, context size: %d"):format(idx, #self[which_context]))
+    assert(ch ~= nil, ("Something went wrong when parsing context! idx: %d, context size: %d"):format(idx, #self.context_table[which_context]))
     return ch
 end
 
 --[[
 -- Returns the n chars of the specified context.
 -- @param n: Size of context to get, counted starting from the lookupword, beginning
--- at one (so the first char is char 1). A value of 0 returns an empty table.
+-- at one (so the first char is char 1).  A value of 0 returns an empty table.
 -- @param offset: Offset for starting position (optional)
--- @param which_context: Which context table to use. Either "prev_context_table" or
--- "next_context_table". For the previous context, n is applied backward (towards the left).
--- @return string with context as requested
+-- @param which_context: Which context table to use.  Either "prev" or "next".
+-- For the previous context, n is applied backward (towards the left).
+-- @return: string with context as requested
 --]]
 function AnkiNote:get_context_of_length(n, which_context, offset)
     --                    prev        next  
@@ -121,7 +121,7 @@ function AnkiNote:get_context_of_length(n, which_context, offset)
     logger.info("AnkiNote#get_context_of_length() - n", n, "direction", which_context, "offset", offset)
     assert(type(n) == "number")
     assert(n >= 0)
-    assert(which_context == "prev_context_table" or which_context == "next_context_table")
+    assert(which_context == "prev" or which_context == "next")
 
     if not offset then
         offset = 0
@@ -130,17 +130,17 @@ function AnkiNote:get_context_of_length(n, which_context, offset)
     local len_with_offset = n + offset
     -- Since we are not incrementing character by character, there might be a situation where a
     -- single expansion to double the size is not sufficient (especially when the table is still small)
-    while #self[which_context] < len_with_offset do self:expand_content() end
-    if which_context == "next_context_table" then
+    while #self.context_table[which_context] < len_with_offset do self:expand_content() end
+    if which_context == "next" then
         start = 1 + offset
         stop = len_with_offset
     else
-        start = #self[which_context] - len_with_offset + 1
-        stop = #self[which_context] - offset
+        start = #self.context_table[which_context] - len_with_offset + 1
+        stop = #self.context_table[which_context] - offset
     end
     start = start
     stop = stop
-    local content = table.concat(self[which_context], "", start, stop)
+    local content = table.concat(self.context_table[which_context], "", start, stop)
     logger.info(string.format("AnkiNote#get_context_of_length() - start %d, stop %d, content '%s'", start, stop, content))
     -- since Japanese characters are multi byte, it is expected that #content > n
     assert(#content >= n, string.format("Something went wrong when retrieving context! n: %d, context size: %d", n, #content))
@@ -151,26 +151,25 @@ end
 
 
 --[[
--- Looks up the delimiter marked by the position n_s, n_p in which_delim_table.
+-- Looks up the delimiter marked by the position n_s, n_p in the delimiter table.
 -- Note: The function will return and value of zero if the given position lies
--- outside of the delimiter table. call init_delim_table beforehand if you want
+-- outside of the delimiter table.  Call init_delimiter_table beforehand if you
 -- to ensure a succesfull lookup.
 -- @param n_s: The number of whole sentences. Has to be positive (>=0).
--- @param n_p: The number of sentence parts. Can also be negative, for any
+-- @param n_p: The number of sentence parts.  Can also be negative, for any
 -- position that would result in a negative length no context is assumed.
--- @param which_delim_table: Which delimiter table to use. Either
--- "prev_delim_table" or "next_delim_table".
--- @return: index to the table entry containing the delimiter information.
+-- @param which_context: Which delimiter table to use.  Either "prev" or "next".
+-- @return: Index to the table entry containing the delimiter information.
 -- An index of 0 means that no delimiter was selected (position s=p=0, or a
 -- negative position).
 -- An index of -1 means that the delimiter table is not large enough and the
 -- position lies outside.
 --]]
-function AnkiNote:find_delim_from_position(n_s, n_p, which_delim_table)
+function AnkiNote:find_delim_from_position(n_s, n_p, which_context)
 
-    -- logger.info("AnkiNote#get_delim_from_table() -", "n_s", n_s, "n_p", n_p, "which_delim_table", which_delim_table)
+    -- logger.info("AnkiNote#get_delim_from_table() -", "n_s", n_s, "n_p", n_p, "which_context", which_context)
 
-    assert(which_delim_table == "prev_delim_table" or which_delim_table == "next_delim_table")
+    assert(which_context == "prev" or which_context == "next")
     assert(type(n_s) == "number")
     assert(n_s >= 0)
     assert(type(n_p) == "number")
@@ -182,7 +181,7 @@ function AnkiNote:find_delim_from_position(n_s, n_p, which_delim_table)
     if n_s <= 0 then
         delim_idx = 0 -- delimiter index 0 means "no context" / the position points to the edge of the matched word
     else
-        for i, delim in ipairs(self[which_delim_table]) do
+        for i, delim in ipairs(self.delimiter_table[which_context]) do
             if delim.category == "sentence" then
                 sentence_count = sentence_count + 1
                 if sentence_count >= n_s then
@@ -199,7 +198,7 @@ function AnkiNote:find_delim_from_position(n_s, n_p, which_delim_table)
     -- determine part-of-sentence position
     if delim_idx and n_p ~= 0 then
         delim_idx = math.max(0, delim_idx + n_p)
-        if delim_idx > #self[which_delim_table] then
+        if delim_idx > #self.delimiter_table[which_context] then
             -- position is outside
             delim_idx = -1
         end
@@ -211,13 +210,12 @@ end
 -- Initializes or extends the delimiter table to guarantee it contains the
 -- position specified by the parameters n_s, n_p.
 --
--- @param which_delim_table: Which delimiter table to use. Either
--- "prev_delim_table" or "next_delim_table".
+-- @param which_context: Which delimiter table to use. Either "prev" or "next".
 -- @param n_s: The number of whole sentences. Has to be positive (>=0).
 -- @param n_p: The number of sentence parts. Can also be negative, though only
 -- positive values are really relevant.
 --]]
-function AnkiNote:init_delim_table(n_s, n_p, which_delim_table)
+function AnkiNote:init_delimiter_table(n_s, n_p, which_context)
 
     -- The delimiter table saves the location of all delimiters up to a certain
     -- position.  Multiple consecutive delimiting characters are treated like a
@@ -238,9 +236,9 @@ function AnkiNote:init_delim_table(n_s, n_p, which_delim_table)
     -- * `category` marks a delimiter as either "sentence" or "sentence_part".
 
 
-    logger.info("AnkiNote#init_delim_table() -", "n_s", n_s, "n_p", n_p, "which_delim_table", which_delim_table)
+    logger.info("AnkiNote#init_delimiter_table() -", "n_s", n_s, "n_p", n_p, "which_context", which_context)
 
-    assert(which_delim_table == "prev_delim_table" or which_delim_table == "next_delim_table")
+    assert(which_context == "prev" or which_context == "next")
     assert(type(n_s) == "number")
     assert(type(n_p) == "number")
 
@@ -248,11 +246,14 @@ function AnkiNote:init_delim_table(n_s, n_p, which_delim_table)
     local part_of_sentence_delimiters = u.to_set(util.splitToChars(self.conf.part_of_sentence_delimiters:get_value()))
 
     -- initialize delimiter table
-    if not self[which_delim_table] then
-        logger.info("AnkiNote#init_delim_table() -", "initializing delimiter table")
-        self[which_delim_table] = {}
+    if not self.delimiter_table then
+        self.delimiter_table = {}
     end
-    local delimiters = self[which_delim_table]
+    if not self.delimiter_table[which_context] then
+        logger.info("AnkiNote#init_delimiter_table() -", "initializing delimiter table")
+        self.delimiter_table[which_context] = {}
+    end
+    local delimiters = self.delimiter_table[which_context]
 
     -- figure out how much context the current delimiter table already covers
     -- Note: Actually, there might be more text following behind the final delimiter in our table
@@ -263,31 +264,25 @@ function AnkiNote:init_delim_table(n_s, n_p, which_delim_table)
     else
         idx = delimiters[#delimiters].stop + 1
     end
-    logger.info("AnkiNote#init_delim_table() -", "existing delimiter table covers", idx-1, "chars")
+    logger.info("AnkiNote#init_delimiter_table() -", "existing delimiter table covers", idx-1, "chars")
 
-    local which_context
-    if which_delim_table == "next_delim_table" then
-        which_context = "next_context_table"
-    else
-        which_context = "prev_context_table"
-    end
     local current_delimiter
 
     -- extend delimiter table until it reaches the specified position
-    while self:find_delim_from_position(n_s, n_p, which_delim_table) < 0 do
+    while self:find_delim_from_position(n_s, n_p, which_context) < 0 do
         local ch = self:get_context_at_char(idx, which_context)
         if part_of_sentence_delimiters[ch] or sentence_delimiters[ch] then
             -- we matched a delimiter
-            logger.info("AnkiNote#init_delim_table() -", "We matched a delimiter:", ch, "at idx", idx)
+            logger.info("AnkiNote#init_delimiter_table() -", "We matched a delimiter:", ch, "at idx", idx)
             if not current_delimiter then
                 current_delimiter = {}
                 current_delimiter.start = idx
                 current_delimiter.stop = idx
                 if part_of_sentence_delimiters[ch] then
-                    logger.info("AnkiNote#init_delim_table() -", "We matched a delimiter:", "new part delimiter mark")
+                    logger.info("AnkiNote#init_delimiter_table() -", "We matched a delimiter:", "new part delimiter mark")
                     current_delimiter.category = "sentence_part"
                 elseif sentence_delimiters[ch] then
-                    logger.info("AnkiNote#init_delim_table() -", "We matched a delimiter:", "new sentence delimiter mark")
+                    logger.info("AnkiNote#init_delimiter_table() -", "We matched a delimiter:", "new sentence delimiter mark")
                     current_delimiter.category = "sentence"
                 else
                     -- unknown identifier (currently only sentence / part of sentence exist)
@@ -296,7 +291,7 @@ function AnkiNote:init_delim_table(n_s, n_p, which_delim_table)
                 -- in case several delimiters appear directly next to each other, treat them like a
                 -- single delimiter while saving the position of the last one
                 current_delimiter.stop = idx
-                logger.info("AnkiNote#init_delim_table() -", "We matched a delimiter:", "belongs to ", current_delimiter.start, "-", current_delimiter.stop)
+                logger.info("AnkiNote#init_delimiter_table() -", "We matched a delimiter:", "belongs to ", current_delimiter.start, "-", current_delimiter.stop)
                 -- In case of something like "foo bar,.", treat it like a sentence delimiter.
                 -- A possible case where you might think about doing something else could be if
                 -- paired delimiters are involved, for example "'Hello World', he said"
@@ -307,7 +302,7 @@ function AnkiNote:init_delim_table(n_s, n_p, which_delim_table)
         else
             if current_delimiter then
                 -- save delimiter to delimiter table
-                logger.info("AnkiNote#init_delim_table() -", "Continuing with normal text, saving last delimiter mark")
+                logger.info("AnkiNote#init_delimiter_table() -", "Continuing with normal text, saving last delimiter mark")
                 table.insert(delimiters, current_delimiter)
                 current_delimiter = nil
             end
@@ -315,26 +310,25 @@ function AnkiNote:init_delim_table(n_s, n_p, which_delim_table)
         idx = idx + 1
     end
     if #delimiters >= 1 then
-        logger.info("AnkiNote#init_delim_table() -", "Finished. New delim table", which_delim_table, "covers", delimiters[#delimiters].stop, "characters")
+        logger.info("AnkiNote#init_delimiter_table() -", "Finished. New delim table", which_context, "covers", delimiters[#delimiters].stop, "characters")
     else
-        logger.info("AnkiNote#init_delim_table() -", "Finished. New delim table is empty")
+        logger.info("AnkiNote#init_delimiter_table() -", "Finished. New delim table is empty")
     end
-    logger.info("AnkiNote#init_delim_table() -", u.dump(delimiters))
+    logger.info("AnkiNote#init_delimiter_table() -", u.dump(delimiters))
 end
 
 --[[
 -- Iterator that iterates through all delimiter characters between the two given
 -- delimiters.
 -- @param idx_delim_prev: Index of the delimiter on which to start.
--- Assumed to mark a position in previous_delim_table.
+-- Assumed to mark a position in the "prev" context.
 -- @param idx_delim_next: Index of the delimiter on which to end (inclusive).
--- Assumed to mark a position in next_delim_table.
+-- Assumed to mark a position in the "next" context.
 -- @return pos, ch for each delimiter char, nil when finished or no valid entries.
 -- * pos: The position of the current entry.  A table with following entries:
---    * which_delim_table  which delimiter table
---    * which_context      which context table
+--    * which_context      which context (prev / next)
 --    * ctx_len            ch is the n-th char in which_context
---    * delim_idx          index of the delimiter in which_delim_table
+--    * delim_idx          index of the delimiter in the delimiter table
 --    * delim_char_offset  for cases where a delimiter encompasses multiple chars.
 --                         A value of 0 = no offset = first char of the delimiter
 -- * ch:  The current delimiter character
@@ -342,8 +336,8 @@ end
 
 function AnkiNote:all_delimiter_chars(idx_delim_prev, idx_delim_next)
     -- check limits of delim table
-    assert(idx_delim_prev <= #self.prev_delim_table and idx_delim_prev >= 0)
-    assert(idx_delim_next <= #self.next_context_table and idx_delim_next >= 0)
+    assert(idx_delim_prev <= #self.delimiter_table.prev and idx_delim_prev >= 0)
+    assert(idx_delim_next <= #self.context_table.next and idx_delim_next >= 0)
 
     -- start with outermost delimiting character of the previous context (= on the very left)
     local direction_inward = true
@@ -356,19 +350,16 @@ function AnkiNote:all_delimiter_chars(idx_delim_prev, idx_delim_next)
     end
 
     local function iterate()
-        local which_delim_table
         local which_context
         local incr
         if direction_inward then
-            which_delim_table = "prev_delim_table"
-            which_context = "prev_context_table"
+            which_context = "prev"
             incr = -1
         else
-            which_delim_table = "next_delim_table"
-            which_context = "next_context_table"
+            which_context = "next"
             incr = 1
         end
-        -- logger.info("AnkiNote#calculate_context_length()#all_delimiter_chars()#iterator() - ", "CALL", which_delim_table, which_context, "delim_char_offset", delim_char_offset, "delim_idx", delim_idx)
+        -- logger.info("AnkiNote#calculate_context_length()#all_delimiter_chars()#iterator() - ", "CALL", which_context, "delim_char_offset", delim_char_offset, "delim_idx", delim_idx)
         -- check if we are finished
         if (not direction_inward) and delim_idx > idx_delim_next then
             return nil
@@ -376,22 +367,21 @@ function AnkiNote:all_delimiter_chars(idx_delim_prev, idx_delim_next)
         -- get current character info
         local ctx_len
         if direction_inward then
-            ctx_len = self[which_delim_table][delim_idx].stop + delim_char_offset
+            ctx_len = self.delimiter_table[which_context][delim_idx].stop + delim_char_offset
         else
-            ctx_len = self[which_delim_table][delim_idx].start + delim_char_offset
+            ctx_len = self.delimiter_table[which_context][delim_idx].start + delim_char_offset
         end
         local ch = self:get_context_at_char(ctx_len, which_context)
         local pos = {}
-        pos.which_delim_table = which_delim_table
         pos.which_context = which_context
         pos.ctx_len = ctx_len
         pos.delim_idx = delim_idx
         pos.delim_char_offset = delim_char_offset
         -- setup position of next delimiter character
-        -- logger.info("AnkiNote#calculate_context_length()#all_delimiter_chars()#iterator() - ", which_delim_table, which_context, "delim_char_offset", delim_char_offset, "delim_idx", delim_idx, "ctx_len", ctx_len, "ch", ch)
+        -- logger.info("AnkiNote#calculate_context_length()#all_delimiter_chars()#iterator() - ", which_context, "delim_char_offset", delim_char_offset, "delim_idx", delim_idx, "ctx_len", ctx_len, "ch", ch)
         delim_char_offset = delim_char_offset + incr -- move to next char
-        if not (ctx_len + incr >= self[which_delim_table][delim_idx].start and
-                ctx_len + incr <= self[which_delim_table][delim_idx].stop) then
+        if not (ctx_len + incr >= self.delimiter_table[which_context][delim_idx].start and
+                ctx_len + incr <= self.delimiter_table[which_context][delim_idx].stop) then
             -- move to next delimiter
             delim_idx = delim_idx + incr
             delim_char_offset = 0
@@ -411,7 +401,7 @@ end
 -- For example, n_s=0 n_p=5 could be better described as n_s=2 n_p=1.
 -- @param n_s: The number of whole sentences. Has to be positive (>=0).
 -- @param n_p: The number of sentence parts. Can also be negative.
--- @param which_context: Which context table to use. Either "prev_context_table" or "next_context_table".
+-- @param which_context: Which context table to use. Either "prev" or "next".
 -- @return: n_s_optimal, n_p_optimal
 --]]
 function AnkiNote:optimize_position(n_s, n_p, which_context, len_offset)
@@ -424,7 +414,7 @@ end
 -- @param s_inc: The number of whole sentences to move .
 -- @param p_inc: The number of sentence parts.
 -- @param c_inc: The number of characters for manual adjustment.
--- @param which_context: Which context table to use. Either "prev_context_table" or "next_context_table".
+-- @param which_context: Which context table to use. Either "prev" or "next".
 -- @return: new_s, new_p, new_c
 --]]
 -- Note: This might completely make obsolete the need to save a position as s, p, c?
@@ -468,7 +458,7 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
         local whitespace_map = u.to_set(util.splitToChars(" 　〿\t\n"))
         -- remove preceding whitespace, going from outward back inside
         while len_prev > 0 do
-            local ch = self:get_context_at_char(len_prev, "prev_context_table")
+            local ch = self:get_context_at_char(len_prev, "prev")
             if whitespace_map[ch] then
                 len_prev = len_prev - 1
             else
@@ -492,8 +482,8 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
         local retain_trailing_delims = u.to_set(util.splitToChars(self.conf.retained_trailing_delimiters:get_value()))
         -- include trailing punctuation that is specified in the setting
         if idx_delim_next > 0 then
-            while len_next + 1 <= self.next_delim_table[idx_delim_next].stop and
-                retain_trailing_delims[self:get_context_at_char(len_next + 1, "next_context_table")] do
+            while len_next + 1 <= self.delimiter_table.next[idx_delim_next].stop and
+                retain_trailing_delims[self:get_context_at_char(len_next + 1, "next")] do
                 len_next = len_next + 1
             end
         end
@@ -566,12 +556,12 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
                         logger.info("AnkiNote#calculate_context_length()#parse_pairs() - matched a valid closing pair", ch)
                         -- update position of outermost matching pair characters
                         if (not prev_first_valid_open) or
-                           (opening_pairs_stack[i].pos.which_context == "prev_context_table" and
+                           (opening_pairs_stack[i].pos.which_context == "prev" and
                            opening_pairs_stack[i].pos.ctx_len > prev_first_valid_open.pos.ctx_len) then
                             prev_first_valid_open = opening_pairs_stack[i]
                         end
                         if (not next_last_valid_closing) or
-                           (pos.which_context == "next_context_table" and
+                           (pos.which_context == "next" and
                            pos.ctx_len > next_last_valid_closing.pos.ctx_len) then
                             next_last_valid_closing = {pos=pos, ch=ch}
                         end
@@ -591,11 +581,11 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
         -- logger.info("AnkiNote#calculate_context_length()#parse_pairs() - ", "last matching closing pair", next_last_valid_closing.ch, "at ctx_len", next_last_valid_closing.pos.ctx_len, "in", next_last_valid_closing.pos.which_context)
         -- adjust context outwards to include all delimiting characters up to the first / last matching paired delimiter
         if prev_first_valid_open and 
-            prev_first_valid_open.pos.which_context == "prev_context_table" then
+            prev_first_valid_open.pos.which_context == "prev" then
             len_prev = math.max(len_prev, prev_first_valid_open.pos.ctx_len)
         end
         if next_last_valid_closing and 
-            next_last_valid_closing.pos.which_context == "next_context_table" then
+            next_last_valid_closing.pos.which_context == "next" then
             len_next = math.max(len_next, next_last_valid_closing.pos.ctx_len)
         end
         return len_prev, len_next
@@ -604,20 +594,20 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
 
     -- calculate basic context length to s,p position without adjustments
     -- final matched delimiter is not included
-    self:init_delim_table(pre_s, pre_p, "prev_delim_table")
-    self:init_delim_table(post_s, post_p, "next_delim_table")
-    local delim_prev = self:find_delim_from_position(pre_s, pre_p, "prev_delim_table")
-    local delim_next = self:find_delim_from_position(post_s, post_p, "next_delim_table")
+    self:init_delimiter_table(pre_s, pre_p, "prev")
+    self:init_delimiter_table(post_s, post_p, "next")
+    local delim_prev = self:find_delim_from_position(pre_s, pre_p, "prev")
+    local delim_next = self:find_delim_from_position(post_s, post_p, "next")
     logger.info("AnkiNote#get_custom_context() -", "delim_prev", delim_prev, "delim_next", delim_next)
 
     -- start with no delimiting characters included
     local len_prev = 0
     local len_next = 0
     if delim_prev > 0 then
-        len_prev = self.prev_delim_table[delim_prev].start - 1
+        len_prev = self.delimiter_table.prev[delim_prev].start - 1
     end
     if delim_next > 0 then
-        len_next = self.next_delim_table[delim_next].start - 1
+        len_next = self.delimiter_table.next[delim_next].start - 1
     end
     
     -- apply adjustments for smart behavior
@@ -632,8 +622,8 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
     logger.info("AnkiNote#get_custom_context() -", "len_prev", len_prev, "len_next", len_next, "(after applying context offset)")
 
     -- build return values
-    local prepended_content = self:get_context_of_length(len_prev, "prev_context_table")
-    local appended_content = self:get_context_of_length(len_next, "next_context_table")
+    local prepended_content = self:get_context_of_length(len_prev, "prev")
+    local appended_content = self:get_context_of_length(len_next, "next")
     -- These variables can be used to detect if any content was prepended / appended
     self.has_prepended_content = len_prev > 0
     self.has_appended_content = len_next > 0
@@ -717,23 +707,26 @@ end
 
 function AnkiNote:init_context_buffer(size)
     logger.info(("(re)initializing context buffer with size: %d"):format(size))
-    if self.prev_context_table and self.next_context_table then
-        logger.info(("before reinit: prev table = %d, next table = %d"):format(#self.prev_context_table, #self.next_context_table))
+    if not self.context_table then
+        self.context_table = {}
+    end
+    if self.context_table.prev and self.context_table.next then
+        logger.info(("before reinit: prev table = %d, next table = %d"):format(#self.context_table.prev, #self.context_table.next))
     end
     local skipped_chars = u.to_set(util.splitToChars(("\n\r")))
     local prev_c, next_c = self.ui.highlight:getSelectedWordContext(size)
     -- pass trimmed word context along to be modified
     prev_c = prev_c .. self.word_trim.before
     next_c = self.word_trim.after .. next_c
-    self.prev_context_table = {}
+    self.context_table.prev = {}
     for _, ch in ipairs(util.splitToChars(prev_c)) do
-        if not skipped_chars[ch] then table.insert(self.prev_context_table, ch) end
+        if not skipped_chars[ch] then table.insert(self.context_table.prev, ch) end
     end
-    self.next_context_table = {}
+    self.context_table.next = {}
     for _, ch in ipairs(util.splitToChars(next_c)) do
-        if not skipped_chars[ch] then table.insert(self.next_context_table, ch) end
+        if not skipped_chars[ch] then table.insert(self.context_table.next, ch) end
     end
-    logger.info(("after reinit: prev table = %d, next table = %d"):format(#self.prev_context_table, #self.next_context_table))
+    logger.info(("after reinit: prev table = %d, next table = %d"):format(#self.context_table.prev, #self.context_table.next))
 
 end
 

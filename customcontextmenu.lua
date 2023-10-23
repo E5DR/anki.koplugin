@@ -281,8 +281,8 @@ end
 function CustomContextMenu:update_context()
     local prev, next_, ctx_prev_len, ctx_next_len = self.note:get_custom_context(self.prev_s_cnt, self.prev_p_cnt, self.prev_c_cnt, self.next_s_cnt, self.next_p_cnt, self.next_c_cnt)
     local peek_length = self.note.conf.custom_context_peek_length:get_value()
-    local peek_prev = self.note:get_context_of_length(peek_length, "prev_context_table", ctx_prev_len)
-    local peek_next = self.note:get_context_of_length(peek_length, "next_context_table", ctx_next_len)
+    local peek_prev = self.note:get_context_of_length(peek_length, "prev", ctx_prev_len)
+    local peek_next = self.note:get_context_of_length(peek_length, "next", ctx_next_len)
     local css = [[
         h2 {
             display: inline;
