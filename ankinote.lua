@@ -207,15 +207,20 @@ function AnkiNote:find_delim_from_position(n_s, n_p, which_context)
 end
 
 --[[
--- Initializes or extends the delimiter table to guarantee it contains the
--- position specified by the parameters n_s, n_p.
+-- Initializes or extends the delimiter table to guarantee it covers the
+-- position specified by the parameters n_s, n_p, nc.  Always contains at
+-- least one element.
 --
 -- @param which_context: Which delimiter table to use. Either "pre" or "post".
 -- @param n_s: The number of whole sentences. Has to be positive (>=0).
 -- @param n_p: The number of sentence parts. Can also be negative, though only
 -- positive values are really relevant.
+-- @param n_c: Extra character offset from position n_s, n_p (might be large
+-- enough to cover one or more additional delimiters). Can also be negative,
+-- though the resulting table will always be large enough so that it covers
+-- the position n_s, n_p.
 --]]
-function AnkiNote:init_delimiter_table(n_s, n_p, which_context)
+function AnkiNote:init_delimiter_table(n_s, n_p, n_c, which_context)
 
     -- The delimiter table saves the location of all delimiters up to a certain
     -- position.  Multiple consecutive delimiting characters are treated like a
@@ -241,6 +246,7 @@ function AnkiNote:init_delimiter_table(n_s, n_p, which_context)
     assert(which_context == "pre" or which_context == "post", "unknown context '" .. which_context .. "'!")
     assert(type(n_s) == "number")
     assert(type(n_p) == "number")
+    assert(type(n_c) == "number")
 
     local sentence_delimiters = u.to_set(util.splitToChars(self.conf.sentence_delimiters:get_value()))
     local part_of_sentence_delimiters = u.to_set(util.splitToChars(self.conf.part_of_sentence_delimiters:get_value()))
@@ -266,10 +272,20 @@ function AnkiNote:init_delimiter_table(n_s, n_p, which_context)
     end
     logger.info("AnkiNote#init_delimiter_table() -", "existing delimiter table covers", idx-1, "chars")
 
+    local function need_to_expand_table(n_s, n_p, n_c, which_context)
+        -- ensure the table always has at least one entry
+        if #delimiters < 1 then return true end
+        -- ensure the table is large enough to cover the position n_s, n_p, n_c
+        local delim_idx = self:find_delim_from_position(n_s, n_p, which_context)
+        local delim_covered = delim_idx >= 0
+        local total_position_covered = delimiters[math.max(1,delim_idx)].stop + n_c <= delimiters[#delimiters].stop
+        return not (delim_covered and total_position_covered)
+    end
+
     local current_delimiter
 
     -- extend delimiter table until it reaches the specified position
-    while self:find_delim_from_position(n_s, n_p, which_context) < 0 do
+    while need_to_expand_table(n_s, n_p, n_c, which_context) do
         local ch = self:get_context_at_char(idx, which_context)
         if part_of_sentence_delimiters[ch] or sentence_delimiters[ch] then
             -- we matched a delimiter
@@ -309,12 +325,10 @@ function AnkiNote:init_delimiter_table(n_s, n_p, which_context)
         end
         idx = idx + 1
     end
-    if #delimiters >= 1 then
-        logger.info("AnkiNote#init_delimiter_table() -", "Finished. New delim table", which_context, "covers", delimiters[#delimiters].stop, "characters")
-    else
-        logger.info("AnkiNote#init_delimiter_table() -", "Finished. New delim table is empty")
-    end
+
+    assert(#delimiters >= 1)
     logger.info("AnkiNote#init_delimiter_table() -", u.dump(delimiters))
+    logger.info("AnkiNote#init_delimiter_table() -", "Finished. New delim table", which_context, "covers", delimiters[#delimiters].stop, "characters")
 end
 
 --[[
@@ -592,10 +606,10 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
     end
 
 
-    -- calculate basic context length to s,p position without adjustments
+    -- calculate basic context length to s,p,c position without adjustments
     -- final matched delimiter is not included
-    self:init_delimiter_table(pre_s, pre_p, "pre")
-    self:init_delimiter_table(post_s, post_p, "post")
+    self:init_delimiter_table(pre_s, pre_p, pre_c, "pre")
+    self:init_delimiter_table(post_s, post_p, post_c, "post")
     local delim_pre = self:find_delim_from_position(pre_s, pre_p, "pre")
     local delim_post = self:find_delim_from_position(post_s, post_p, "post")
     logger.info("AnkiNote#get_custom_context() -", "delim_pre", delim_pre, "delim_post", delim_post)
