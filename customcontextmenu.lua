@@ -73,117 +73,117 @@ function CustomContextMenu:init()
 
     -- create some helper functions
     local update = function(opts)
-        self.prev_c_cnt = opts.prev_c or self.prev_c_cnt
-        self.prev_p_cnt = opts.prev_p or self.prev_p_cnt
-        self.prev_s_cnt = opts.prev_s or self.prev_s_cnt
-        self.next_c_cnt = opts.next_c or self.next_c_cnt
-        self.next_p_cnt = opts.next_p or self.next_p_cnt
-        self.next_s_cnt = opts.next_s or self.next_s_cnt
+        self.pos.pre_c = opts.pre_c or self.pos.pre_c
+        self.pos.pre_p = opts.pre_p or self.pos.pre_p
+        self.pos.pre_s = opts.pre_s or self.pos.pre_s
+        self.pos.post_c = opts.post_c or self.pos.post_c
+        self.pos.post_p = opts.post_p or self.pos.post_p
+        self.pos.post_s = opts.post_s or self.pos.post_s
         self:update_context()
     end
     local can_prepend = function() return self.note.has_prepended_content end
     local can_append = function() return self.note.has_appended_content end
-    local prev_c_inc = function(inc) update({ prev_c = self.prev_c_cnt + inc}) end
-    local next_c_inc = function(inc) update({ next_c = self.next_c_cnt + inc}) end
+    local pre_c_inc = function(inc) update({pre_c = self.pos.pre_c + inc}) end
+    local post_c_inc = function(inc) update({post_c = self.pos.post_c + inc}) end
     -- char counter is reset to 0 when sentence part count is changed
-    local prev_p_inc = function(inc)
-        local reset_is_sufficient = (inc > 0 and self.prev_c_cnt < 0) or (inc < 0 and self.prev_c_cnt > 0)
+    local pre_p_inc = function(inc)
+        local reset_is_sufficient = (inc > 0 and self.pos.pre_c < 0) or (inc < 0 and self.pos.pre_c > 0)
         if reset_is_sufficient then
-            -- just reset to next part-of-sentence if there is a character offset in the opposite direction 
-            update({ prev_c = 0})
+            -- just reset to post part-of-sentence if there is a character offset in the opposite direction 
+            update({ pre_c = 0})
         else
-            update({ prev_c = 0, prev_p = self.prev_p_cnt + inc})
+            update({ pre_c = 0, pre_p = self.pos.pre_p + inc})
         end
     end
-    local next_p_inc = function(inc)
-        local reset_is_sufficient = (inc > 0 and self.next_c_cnt < 0) or (inc < 0 and self.next_c_cnt > 0)
+    local post_p_inc = function(inc)
+        local reset_is_sufficient = (inc > 0 and self.pos.post_c < 0) or (inc < 0 and self.pos.post_c > 0)
         if reset_is_sufficient then
-            -- just reset to next part-of-sentence if there is a character offset in the opposite direction
+            -- just reset to post part-of-sentence if there is a character offset in the opposite direction
             -- Note: what about larger increments (currently not the case)? Will be eaten currently
-            update({ next_c = 0})
+            update({ post_c = 0})
         else
-            update({ next_c = 0, next_p = self.next_p_cnt + inc})
+            update({ post_c = 0, post_p = self.pos.post_p + inc})
         end
     end
     
-    local prev_s_inc = function(inc)
-        -- TODO: set unused prev cnts to 0
+    local pre_s_inc = function(inc)
+        -- TODO: set unused pre cnts to 0
         if inc == 0 then
             return
         end
-        local prev_ctx_current, next_ctx_current = self.note:get_custom_context(self.prev_s_cnt, self.prev_p_cnt, self.prev_c_cnt, self.next_s_cnt, self.next_p_cnt, self.next_c_cnt)
-        local prev_ctx_reset, next_ctx_reset = self.note:get_custom_context(self.prev_s_cnt, 0, 0, self.next_s_cnt, 0, 0)
-        local reset_is_sufficient = (inc > 0 and #prev_ctx_reset > #prev_ctx_current) or (inc < 0 and #prev_ctx_reset < #prev_ctx_current)
+        local pre_ctx_current, post_ctx_current = self.note:get_custom_context(self.pos.pre_s, self.pos.pre_p, self.pos.pre_c, self.pos.post_s, self.pos.post_p, self.pos.post_c)
+        local pre_ctx_reset, post_ctx_reset = self.note:get_custom_context(self.pos.pre_s, 0, 0, self.pos.post_s, 0, 0)
+        local reset_is_sufficient = (inc > 0 and #pre_ctx_reset > #pre_ctx_current) or (inc < 0 and #pre_ctx_reset < #pre_ctx_current)
         if reset_is_sufficient then
             -- If resetting part + char results will result in a context that is further in the desired direction, then just do that
             -- Note: might also check if it is longer than the next sentence
             -- Note: what about larger increments (currently not the case)? Will be eaten currently
-            update({ prev_c = 0, prev_p = 0})
+            update({ pre_c = 0, pre_p = 0})
         else
-            update({ prev_c = 0, prev_p = 0, prev_s = math.max(0, self.prev_s_cnt + inc)})
+            update({ pre_c = 0, pre_p = 0, pre_s = math.max(0, self.pos.pre_s + inc)})
         end
     end
 
-    local next_s_inc = function(inc)
-        -- TODO: set unused prev cnts to 0
+    local post_s_inc = function(inc)
+        -- TODO: set unused pre cnts to 0
         if inc == 0 then
             return
         end
-        local prev_ctx_current, next_ctx_current = self.note:get_custom_context(self.prev_s_cnt, self.prev_p_cnt, self.prev_c_cnt, self.next_s_cnt, self.next_p_cnt, self.next_c_cnt)
-        local prev_ctx_reset, next_ctx_reset = self.note:get_custom_context(self.prev_s_cnt, 0, 0, self.next_s_cnt, 0, 0)
-        local reset_is_sufficient = (inc > 0 and #next_ctx_reset > #next_ctx_current) or (inc < 0 and #next_ctx_reset < #next_ctx_current)
+        local pre_ctx_current, post_ctx_current = self.note:get_custom_context(self.pos.pre_s, self.pos.pre_p, self.pos.pre_c, self.pos.post_s, self.pos.post_p, self.pos.post_c)
+        local pre_ctx_reset, post_ctx_reset = self.note:get_custom_context(self.pos.pre_s, 0, 0, self.pos.post_s, 0, 0)
+        local reset_is_sufficient = (inc > 0 and #post_ctx_reset > #post_ctx_current) or (inc < 0 and #post_ctx_reset < #post_ctx_current)
         if reset_is_sufficient then
             -- If resetting part + char results will result in a context that is further in the desired direction, then just do that
             -- Note: might also check if it is longer than the next sentence
             -- Note: what about larger increments (currently not the case)? Will be eaten currently
-            update({ next_c = 0, next_p = 0})
+            update({ post_c = 0, post_p = 0})
         else
-            update({ next_c = 0, next_p = 0, next_s = math.max(0, self.next_s_cnt + inc)})
+            update({ post_c = 0, post_p = 0, post_s = math.max(0, self.pos.post_s + inc)})
         end
     end
 
     -- buttons for editing previous context
-    local remove_prev_sentence_part = make_button("⏩", btn_width, function() prev_p_inc(-1) end , can_prepend)
-    local remove_prev_char =          make_button("1-", btn_width, function() prev_c_inc(-1) end, can_prepend)
-    local append_prev_char =          make_button("+1", btn_width, function() prev_c_inc(1) end)
-    local append_prev_sentence_part = make_button("⏪", btn_width, function() prev_p_inc(1) end)
-    local reset_prev =                make_button("Reset", btn_width*2, function() self:reset_prev(); return self:update_context() end)
+    local remove_pre_sentence_part = make_button("⏩", btn_width, function() pre_p_inc(-1) end , can_prepend)
+    local remove_pre_char =          make_button("1-", btn_width, function() pre_c_inc(-1) end, can_prepend)
+    local append_pre_char =          make_button("+1", btn_width, function() pre_c_inc(1) end)
+    local append_pre_sentence_part = make_button("⏪", btn_width, function() pre_p_inc(1) end)
+    local reset_pre =                make_button("Reset", btn_width*2, function() self:reset_pre(); return self:update_context() end)
 
     -- buttons for editing following context
-    local remove_next_sentence_part = make_button("⏪", btn_width, function() next_p_inc(-1) end, can_append)
-    local remove_next_char =          make_button("-1", btn_width, function() next_c_inc(-1) end, can_append)
-    local append_next_char =          make_button("1+", btn_width, function() next_c_inc(1) end)
-    local append_next_sentence_part = make_button("⏩", btn_width, function() next_p_inc(1) end)
-    local reset_next =                make_button("Reset", btn_width*2, function() self:reset_next(); self:update_context() end)
+    local remove_post_sentence_part = make_button("⏪", btn_width, function() post_p_inc(-1) end, can_append)
+    local remove_post_char =          make_button("-1", btn_width, function() post_c_inc(-1) end, can_append)
+    local append_post_char =          make_button("1+", btn_width, function() post_c_inc(1) end)
+    local append_post_sentence_part = make_button("⏩", btn_width, function() post_p_inc(1) end)
+    local reset_post =                make_button("Reset", btn_width*2, function() self:reset_post(); self:update_context() end)
 
     -- holding the ±1 buttons allows to jump back and forth in larger increments 
-    remove_prev_char.hold_callback = function() prev_c_inc(- self.note.conf.custom_context_jump_size:get_value()) end
-    append_prev_char.hold_callback = function() prev_c_inc(  self.note.conf.custom_context_jump_size:get_value()) end
-    remove_next_char.hold_callback = function() next_c_inc(- self.note.conf.custom_context_jump_size:get_value()) end
-    append_next_char.hold_callback = function() next_c_inc(  self.note.conf.custom_context_jump_size:get_value()) end
+    remove_pre_char.hold_callback = function() pre_c_inc(- self.note.conf.custom_context_jump_size:get_value()) end
+    append_pre_char.hold_callback = function() pre_c_inc(  self.note.conf.custom_context_jump_size:get_value()) end
+    remove_post_char.hold_callback = function() post_c_inc(- self.note.conf.custom_context_jump_size:get_value()) end
+    append_post_char.hold_callback = function() post_c_inc(  self.note.conf.custom_context_jump_size:get_value()) end
 
     -- holding the << / >> buttons makes them apply sentences instead of parts of sentences
-    remove_prev_sentence_part.hold_callback = function() prev_s_inc(-1) end
-    append_prev_sentence_part.hold_callback = function() prev_s_inc( 1) end
-    remove_next_sentence_part.hold_callback = function() next_s_inc(-1) end
-    append_next_sentence_part.hold_callback = function() next_s_inc( 1) end
+    remove_pre_sentence_part.hold_callback = function() pre_s_inc(-1) end
+    append_pre_sentence_part.hold_callback = function() pre_s_inc( 1) end
+    remove_post_sentence_part.hold_callback = function() post_s_inc(-1) end
+    append_post_sentence_part.hold_callback = function() post_s_inc( 1) end
 
     self.top_row = HorizontalGroup:new{
         align = "center",
-    append_prev_sentence_part,
-    append_prev_char,
-    reset_prev,
-    remove_prev_char,
-    remove_prev_sentence_part,
+    append_pre_sentence_part,
+    append_pre_char,
+    reset_pre,
+    remove_pre_char,
+    remove_pre_sentence_part,
     }
 
     self.bottom_row = HorizontalGroup:new{
         align = "center",
-    remove_next_sentence_part,
-    remove_next_char,
-    reset_next,
-    append_next_char,
-    append_next_sentence_part,
+    remove_post_sentence_part,
+    remove_post_char,
+    reset_post,
+    append_post_char,
+    append_post_sentence_part,
     }
 
     local save_btn = make_button("Save with custom context", btn_width*4, self.on_save_cb)
@@ -252,37 +252,43 @@ function CustomContextMenu:onTap(_, ges_ev)
 end
 
 function CustomContextMenu:reset()
-    self:reset_prev()
-    self:reset_next()
+    self:reset_pre()
+    self:reset_post()
 end
 
-function CustomContextMenu:reset_prev()
-    if self.note.conf.default_context_is_sentence_part:get_value() then
-        self.prev_s_cnt = 0
-        self.prev_p_cnt = 1
-    else
-        self.prev_s_cnt = 1
-        self.prev_p_cnt = 0
+function CustomContextMenu:reset_pre()
+    if not self.pos then
+        self.pos = {}
     end
-    self.prev_c_cnt = 0
+    if self.note.conf.default_context_is_sentence_part:get_value() then
+        self.pos.pre_s = 0
+        self.pos.pre_p = 1
+    else
+        self.pos.pre_s = 1
+        self.pos.pre_p = 0
+    end
+    self.pos.pre_c = 0
 end
 
-function CustomContextMenu:reset_next()
-    if self.note.conf.default_context_is_sentence_part:get_value() then
-        self.next_s_cnt = 0
-        self.next_p_cnt = 1
-    else
-        self.next_s_cnt = 1
-        self.next_p_cnt = 0
+function CustomContextMenu:reset_post()
+    if not self.pos then
+        self.pos = {}
     end
-    self.next_c_cnt = 0
+    if self.note.conf.default_context_is_sentence_part:get_value() then
+        self.pos.post_s = 0
+        self.pos.post_p = 1
+    else
+        self.pos.post_s = 1
+        self.pos.post_p = 0
+    end
+    self.pos.post_c = 0
 end
 
 function CustomContextMenu:update_context()
-    local prev, next_, ctx_prev_len, ctx_next_len = self.note:get_custom_context(self.prev_s_cnt, self.prev_p_cnt, self.prev_c_cnt, self.next_s_cnt, self.next_p_cnt, self.next_c_cnt)
+    local pre, post, ctx_pre_len, ctx_post_len = self.note:get_custom_context(self.pos.pre_s, self.pos.pre_p, self.pos.pre_c, self.pos.post_s, self.pos.post_p, self.pos.post_c)
     local peek_length = self.note.conf.custom_context_peek_length:get_value()
-    local peek_prev = self.note:get_context_of_length(peek_length, "prev", ctx_prev_len)
-    local peek_next = self.note:get_context_of_length(peek_length, "next", ctx_next_len)
+    local peek_pre = self.note:get_context_of_length(peek_length, "pre", ctx_pre_len)
+    local peek_post = self.note:get_context_of_length(peek_length, "post", ctx_post_len)
     local css = [[
         h2 {
             display: inline;
@@ -302,7 +308,7 @@ function CustomContextMenu:update_context()
         }
     ]]
     local context_fmt = '<div lang="ja"><p><span class="peek">…%s</span>%s<h2 class="lookupword">%s</h2>%s<span class="peek">%s…</span></p></div>'
-    local context = context_fmt:format(peek_prev, prev, self.note.popup_dict.word, next_, peek_next)
+    local context = context_fmt:format(peek_pre, pre, self.note.popup_dict.word, post, peek_post)
 
     self[1]:free()
     self.scroll_widget.htmlbox_widget:setContent(context, css, Screen:scaleBySize(self.font_size))
