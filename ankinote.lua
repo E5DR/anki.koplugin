@@ -410,62 +410,26 @@ function AnkiNote:all_delimiter_chars(idx_delim_pre, idx_delim_post)
     return iterate
 end
 
---[[
--- Returns the optimal way a position can be reached.
--- For example, n_s=0 n_p=5 could be better described as n_s=2 n_p=1.
--- @param n_s: The number of whole sentences. Has to be positive (>=0).
--- @param n_p: The number of sentence parts. Can also be negative.
--- @param which_context: Which context table to use. Either "pre" or "post".
--- @return: n_s_optimal, n_p_optimal
---]]
-function AnkiNote:optimize_position(n_s, n_p, which_context, len_offset)
--- TODO: implement
-end
 
 --[[
--- Returns a new set of s, p, c positions after moving by s_inc, p_inc, c_inc from current_position.
--- @param current_position: The current position (context length) including all adjustments and offsets.
--- @param s_inc: The number of whole sentences to move .
--- @param p_inc: The number of sentence parts.
--- @param c_inc: The number of characters for manual adjustment.
--- @param which_context: Which context table to use. Either "pre" or "post".
--- @return: new_s, new_p, new_c
+-- Determines the exact pre / post context length given a pair of delimiters.
+-- This is necessary since a delimiter marks a range, not a specific
+-- position.
+-- Applies smart adjustments to trim or include preceding / trailing characters
+-- as needed to get a natural feeling result.
+-- This includes a natural handling of quotes depending on whether there is a
+-- matching pair or nut, and ensuring no undesired characters are included
+-- (especially leading delimiters).
+-- @param delim_pre: Index of the delimiter marking the start of the position
+-- ("pre" side). May be zero to indicate that no context is selected.
+-- @param delim_post: Index of the delimiter marking the end of the position
+-- ("pre" side). May be zero to indicate that no context is selected. 
+-- @return: len_pre, len_post specifying the length of pre / post context in
+-- characters.
 --]]
--- Note: This might completely make obsolete the need to save a position as s, p, c?
--- just save current_position and get returned a new current_position whenever you apply some adjustments
--- default position is current_position + adjustments for the initial position
-function AnkiNote:smart_increment(current_position, s_inc, p_inc, c_inc, which_context)
--- start at current_position
--- find s sentence delims to left/right
--- find p part delims from there
--- adjust by c chars
--- check delim table at new absolute char position
--- find new_s, new_p, new_c for new position
--- TODO: implement
-end
-
-
---[[
--- Returns the context before and after the lookup word together with the length
--- of the context.  The amount of context depends on the following parameters:
--- @param pre_s: amount of sentences prepended
--- @param pre_p: amount of sentence parts prepended (between comma etc.)
--- @param pre_c: amount of characters prepended
--- @param post_s: amount of sentences appended
--- @param post_p: amount of sentence parts appended (between comma etc.)
--- @param post_c: amount of characters appended
--- @return: prepended_content, appended_content, len_pre, len_post
--- The context is a string, the length specifies how many characters long the
--- piece of context is.  Returning the context length makes working with the
--- obtained context easier, since with multibyte characters #foo does not result
--- in the real length.
---]]
--- Note: How to view characters: characters are not part of the position marker
--- `c,p,s`, but rather the position marker is `p,s` and `c` is a separate
--- correction factor that is applied afterwards and independent from that
--- position
-function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c)
-    logger.info("AnkiNote#get_custom_context():", pre_s, pre_p, pre_c, post_s, post_p, post_c)
+function AnkiNote:determine_exact_context_length(delim_pre, delim_post)
+    assert(delim_pre >= 0)
+    assert(delim_post >= 0)
 
     local function trim_whitespace(idx_delim_pre, idx_delim_post, len_pre, len_post)
         -- TODO: use string functions from util to strip whitespace, then calculate new length
@@ -605,16 +569,7 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
         return len_pre, len_post
     end
 
-
-    -- calculate basic context length to s,p,c position without adjustments
-    -- final matched delimiter is not included
-    self:init_delimiter_table(pre_s, pre_p, pre_c, "pre")
-    self:init_delimiter_table(post_s, post_p, post_c, "post")
-    local delim_pre = self:find_delim_from_position(pre_s, pre_p, "pre")
-    local delim_post = self:find_delim_from_position(post_s, post_p, "post")
-    logger.info("AnkiNote#get_custom_context() -", "delim_pre", delim_pre, "delim_post", delim_post)
-
-    -- start with no delimiting characters included
+    -- start with no delimiting characters included on either side
     local len_pre = 0
     local len_post = 0
     if delim_pre > 0 then
@@ -623,11 +578,45 @@ function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c
     if delim_post > 0 then
         len_post = self.delimiter_table.post[delim_post].start - 1
     end
-    
     -- apply adjustments for smart behavior
     len_pre, len_post = smart_paired_delimiters(delim_pre, delim_post, len_pre, len_post)
     len_pre, len_post = include_trailing_punctuation(delim_pre, delim_post, len_pre, len_post)
     len_pre, len_post = trim_whitespace(delim_pre, delim_post, len_pre, len_post)
+    return len_pre, len_post
+end        
+
+
+--[[
+-- Returns the context before and after the lookup word together with the length
+-- of the context.  The amount of context depends on the following parameters:
+-- @param pre_s: amount of sentences prepended
+-- @param pre_p: amount of sentence parts prepended (between comma etc.)
+-- @param pre_c: amount of characters prepended
+-- @param post_s: amount of sentences appended
+-- @param post_p: amount of sentence parts appended (between comma etc.)
+-- @param post_c: amount of characters appended
+-- @return: prepended_content, appended_content, len_pre, len_post
+-- The context is a string, the length specifies how many characters long the
+-- piece of context is.  Returning the context length makes working with the
+-- obtained context easier, since with multibyte characters #foo does not result
+-- in the real length.
+--]]
+-- Note: How to view characters: characters are not part of the position marker
+-- `c,p,s`, but rather the position marker is `p,s` and `c` is a separate
+-- correction factor that is applied afterwards and independent from that
+-- position
+function AnkiNote:get_custom_context(pre_s, pre_p, pre_c, post_s, post_p, post_c)
+    logger.info("AnkiNote#get_custom_context():", pre_s, pre_p, pre_c, post_s, post_p, post_c)
+
+    -- find delimiters for specified position
+    self:init_delimiter_table(pre_s, pre_p, pre_c, "pre")
+    self:init_delimiter_table(post_s, post_p, post_c, "post")
+    local delim_pre = self:find_delim_from_position(pre_s, pre_p, "pre")
+    local delim_post = self:find_delim_from_position(post_s, post_p, "post")
+    logger.info("AnkiNote#get_custom_context() -", "delim_pre", delim_pre, "delim_post", delim_post)
+
+    -- determine context length from delimiters
+    local len_pre, len_post = self:determine_exact_context_length(delim_pre, delim_post)
     logger.info("AnkiNote#get_custom_context() -", "len_pre", len_pre, "len_post", len_post, "(after applying adjustments)")
 
     -- apply context offset for characters as manual correction
