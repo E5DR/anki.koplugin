@@ -79,6 +79,9 @@ function CustomContextMenu:init()
         self.pos.post_c = opts.post_c or self.pos.post_c
         self.pos.post_p = opts.post_p or self.pos.post_p
         self.pos.post_s = opts.post_s or self.pos.post_s
+        local pos_optimized = table.pack(self.note:find_optimal_position_mark(self.pos.pre_s, self.pos.pre_p, self.pos.pre_c, self.pos.post_s, self.pos.post_p, self.pos.post_c))
+        self.pos.pre_s, self.pos.pre_p, self.pos.pre_c = table.unpack(pos_optimized, 1, 3)
+        self.pos.post_s, self.pos.post_p, self.pos.post_c = table.unpack(pos_optimized, 4, 6)
         self:update_context()
     end
     local can_prepend = function() return self.note.has_prepended_content end
@@ -99,7 +102,6 @@ function CustomContextMenu:init()
         local reset_is_sufficient = (inc > 0 and self.pos.post_c < 0) or (inc < 0 and self.pos.post_c > 0)
         if reset_is_sufficient then
             -- just reset to post part-of-sentence if there is a character offset in the opposite direction
-            -- Note: what about larger increments (currently not the case)? Will be eaten currently
             update({ post_c = 0})
         else
             update({ post_c = 0, post_p = self.pos.post_p + inc})
@@ -107,37 +109,33 @@ function CustomContextMenu:init()
     end
     
     local pre_s_inc = function(inc)
-        -- TODO: set unused pre cnts to 0
         if inc == 0 then
             return
         end
-        local pre_ctx_current, post_ctx_current = self.note:get_custom_context(self.pos.pre_s, self.pos.pre_p, self.pos.pre_c, self.pos.post_s, self.pos.post_p, self.pos.post_c)
-        local pre_ctx_reset, post_ctx_reset = self.note:get_custom_context(self.pos.pre_s, 0, 0, self.pos.post_s, 0, 0)
-        local reset_is_sufficient = (inc > 0 and #pre_ctx_reset > #pre_ctx_current) or (inc < 0 and #pre_ctx_reset < #pre_ctx_current)
-        if reset_is_sufficient then
-            -- If resetting part + char results will result in a context that is further in the desired direction, then just do that
-            -- Note: might also check if it is longer than the next sentence
-            -- Note: what about larger increments (currently not the case)? Will be eaten currently
+        -- Note: Due to position optimisation after each update, position values will be positive (Exception: Fine adjustments that remove one or more delimiting characters compared to the automatic adjustments. Example: "「だから" (0,1,0) -> "だから" (0,1,-1) -> "から" (0,0,2))
+        if (inc < 0 and (self.pos.pre_p > 0 or self.pos.pre_c > 0)) or
+           (inc > 0 and (self.pos.pre_p == 0 and self.pos.pre_c < 0))
+        then
+            -- reset to the beginning of the current sentence
             update({ pre_c = 0, pre_p = 0})
         else
+            -- move to the next sentence
             update({ pre_c = 0, pre_p = 0, pre_s = math.max(0, self.pos.pre_s + inc)})
         end
     end
 
     local post_s_inc = function(inc)
-        -- TODO: set unused pre cnts to 0
         if inc == 0 then
             return
         end
-        local pre_ctx_current, post_ctx_current = self.note:get_custom_context(self.pos.pre_s, self.pos.pre_p, self.pos.pre_c, self.pos.post_s, self.pos.post_p, self.pos.post_c)
-        local pre_ctx_reset, post_ctx_reset = self.note:get_custom_context(self.pos.pre_s, 0, 0, self.pos.post_s, 0, 0)
-        local reset_is_sufficient = (inc > 0 and #post_ctx_reset > #post_ctx_current) or (inc < 0 and #post_ctx_reset < #post_ctx_current)
-        if reset_is_sufficient then
-            -- If resetting part + char results will result in a context that is further in the desired direction, then just do that
-            -- Note: might also check if it is longer than the next sentence
-            -- Note: what about larger increments (currently not the case)? Will be eaten currently
+        -- Note: Due to position optimisation after each update, position values will be positive (Exception: Fine adjustments that remove one or more delimiting characters compared to the automatic adjustments. Example: "なんて」" (0,1,0) -> "なんて" (0,1,-1) -> "なん" (0,0,2))
+        if (inc < 0 and (self.pos.post_p > 0 or self.pos.post_c > 0)) or
+           (inc > 0 and (self.pos.post_p == 0 and self.pos.post_c < 0))
+        then
+            -- reset to the beginning of the current sentence
             update({ post_c = 0, post_p = 0})
         else
+            -- move to the next sentence
             update({ post_c = 0, post_p = 0, post_s = math.max(0, self.pos.post_s + inc)})
         end
     end
