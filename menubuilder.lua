@@ -102,6 +102,13 @@ local menu_entries = {
         conf_type = "int", -- TODO
     },
     {
+        id = "custom_context_peek_length",
+        group = custom_context_settings,
+        name = "Preview length",
+        description = "How many characters of preview text should be displayed.",
+        conf_type = "int", -- TODO
+    },
+    {
         id = "move_by_whole_sentences",
         group = custom_context_settings,
         name = "Move by whole sentences",

@@ -37,6 +37,8 @@ local Config = {
     -- default_context_is_sentence_part = false,
     -- How many chars holding the ±1 buttons will jump inside the custom context window
     -- custom_context_jump_size = 8,
+    -- How many characters of preview text should be displayed before and after the context.
+    -- custom_context_peek_length = 12,
     -- Whether the << >> buttons should move by whole sentences (instead of sentence parts).
     -- Effectively swaps tap and hold action for those buttons.
     -- move_by_whole_sentences = false,

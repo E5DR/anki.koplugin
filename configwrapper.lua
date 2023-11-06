@@ -37,7 +37,7 @@ local Config = {
     ConfigOpt:new{ id = 'default_context_is_sentence_part', default = false },
     ConfigOpt:new{ id = 'always_open_custom_context',       default = true },
     ConfigOpt:new{ id = 'custom_context_jump_size',         default = 8 },
-    ConfigOpt:new{ id = 'custom_context_peek_length',       default = 10 },
+    ConfigOpt:new{ id = 'custom_context_peek_length',       default = 12 },
     ConfigOpt:new{ id = 'sentence_delimiters',              default = "「」『』（）【】。！？().?!\"'" },
     ConfigOpt:new{ id = 'part_of_sentence_delimiters',      default = "、," },
     ConfigOpt:new{ id = 'retained_trailing_delimiters',     default = "、。！？.?!," },
