@@ -37,6 +37,9 @@ local Config = {
     -- default_context_is_sentence_part = false,
     -- How many chars holding the ±1 buttons will jump inside the custom context window
     -- custom_context_jump_size = 8,
+    -- Whether the << >> buttons should move by whole sentences (instead of sentence parts).
+    -- Effectively swaps tap and hold action for those buttons.
+    -- move_by_whole_sentences = false,
     -- Punctuation that is used to split sentences (holding the << and >> buttons)
     -- sentence_delimiters = "「」『』（）【】。！？().?!\"'",
     -- Punctuation that is used to split parts of a sentence (<< and >> buttons)

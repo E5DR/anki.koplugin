@@ -141,18 +141,42 @@ function CustomContextMenu:init()
     end
 
     -- buttons for editing previous context
-    local remove_pre_sentence_part = make_button("⏩", btn_width, function() pre_p_inc(-1) end , can_prepend)
     local remove_pre_char =          make_button("1-", btn_width, function() pre_c_inc(-1) end, can_prepend)
     local append_pre_char =          make_button("+1", btn_width, function() pre_c_inc(1) end)
-    local append_pre_sentence_part = make_button("⏪", btn_width, function() pre_p_inc(1) end)
     local reset_pre =                make_button("Reset", btn_width*2, function() self:reset_pre(); return self:update_context() end)
+    local append_pre_sentence_part = make_button("⏪", btn_width, function()
+        if self.note.conf.move_by_whole_sentences:get_value() == true then
+            pre_s_inc(1)
+        else
+            pre_p_inc(1)
+        end
+    end)
+    local remove_pre_sentence_part = make_button("⏩", btn_width, function()
+        if self.note.conf.move_by_whole_sentences:get_value() == true then
+            pre_s_inc(-1)
+        else
+            pre_p_inc(-1)
+        end
+    end , can_prepend)
 
     -- buttons for editing following context
-    local remove_post_sentence_part = make_button("⏪", btn_width, function() post_p_inc(-1) end, can_append)
     local remove_post_char =          make_button("-1", btn_width, function() post_c_inc(-1) end, can_append)
     local append_post_char =          make_button("1+", btn_width, function() post_c_inc(1) end)
-    local append_post_sentence_part = make_button("⏩", btn_width, function() post_p_inc(1) end)
     local reset_post =                make_button("Reset", btn_width*2, function() self:reset_post(); self:update_context() end)
+    local append_post_sentence_part = make_button("⏩", btn_width, function()
+        if self.note.conf.move_by_whole_sentences:get_value() == true then
+            post_s_inc(1)
+        else
+            post_p_inc(1)
+        end
+    end)
+    local remove_post_sentence_part = make_button("⏪", btn_width, function()
+        if self.note.conf.move_by_whole_sentences:get_value() == true then
+            post_s_inc(-1)
+        else
+            post_p_inc(-1)
+        end
+    end, can_append)
 
     -- holding the ±1 buttons allows to jump back and forth in larger increments 
     remove_pre_char.hold_callback = function() pre_c_inc(- self.note.conf.custom_context_jump_size:get_value()) end
@@ -161,10 +185,35 @@ function CustomContextMenu:init()
     append_post_char.hold_callback = function() post_c_inc(  self.note.conf.custom_context_jump_size:get_value()) end
 
     -- holding the << / >> buttons makes them apply sentences instead of parts of sentences
-    remove_pre_sentence_part.hold_callback = function() pre_s_inc(-1) end
-    append_pre_sentence_part.hold_callback = function() pre_s_inc( 1) end
-    remove_post_sentence_part.hold_callback = function() post_s_inc(-1) end
-    append_post_sentence_part.hold_callback = function() post_s_inc( 1) end
+    -- if move_by_whole_sentences is set, tap/hold behaviour is flipped
+    remove_pre_sentence_part.hold_callback = function()
+        if self.note.conf.move_by_whole_sentences:get_value() == true then
+            pre_p_inc(-1)
+        else
+            pre_s_inc(-1)
+        end
+    end
+    append_pre_sentence_part.hold_callback = function()
+        if self.note.conf.move_by_whole_sentences:get_value() == true then
+            pre_p_inc(1)
+        else
+            pre_s_inc(1)
+        end
+    end
+    remove_post_sentence_part.hold_callback = function()
+        if self.note.conf.move_by_whole_sentences:get_value() == true then
+            post_p_inc(-1)
+        else
+            post_s_inc(-1)
+        end
+    end
+    append_post_sentence_part.hold_callback = function()
+        if self.note.conf.move_by_whole_sentences:get_value() == true then
+            post_p_inc(1)
+        else
+            post_s_inc(1)
+        end
+    end
 
     self.top_row = HorizontalGroup:new{
         align = "center",

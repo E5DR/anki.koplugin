@@ -102,6 +102,13 @@ local menu_entries = {
         conf_type = "int", -- TODO
     },
     {
+        id = "move_by_whole_sentences",
+        group = custom_context_settings,
+        name = "Move by whole sentences",
+        description = "Whether the     buttons should move by whole sentences (instead of sentence parts). Effectively swaps tap and hold action.",
+        conf_type = "bool",
+    },
+    {
         id = "word_field",
         group = note_settings,
         name = "Word Field",

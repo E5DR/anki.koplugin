@@ -41,6 +41,7 @@ local Config = {
     ConfigOpt:new{ id = 'sentence_delimiters',              default = "「」『』（）【】。！？().?!\"'" },
     ConfigOpt:new{ id = 'part_of_sentence_delimiters',      default = "、," },
     ConfigOpt:new{ id = 'retained_trailing_delimiters',     default = "、。！？.?!," },
+    ConfigOpt:new{ id = 'move_by_whole_sentences',          default = false },
     ConfigOpt:new{ id = 'context_field' },
     ConfigOpt:new{ id = 'meta_field' },
     ConfigOpt:new{ id = 'audio_field' },
