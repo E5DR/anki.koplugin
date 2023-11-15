@@ -1,6 +1,37 @@
 # Anki plugin for KOReader
 
-KOReader plugin enabling Anki note generation for words looked up in the internal dictionary.
+KOReader plugin enabling Anki note generation for words looked up in the internal dictionary.\
+Fork of the [original AJATT anki koreader plugin](https://github.com/Ajatt-Tools/anki.koplugin).
+
+## My Improvements
+I added various improvements relating to custom context selection that result in a more natural and faster flow:
+
+* Intelligent handling of delimiters.
+  The behavior is such that you will only rarely have to do any manual adjustments:\
+  Leading/trailing delimiters are automatically included or removed as appropriate for a natural feeling result. The plugin is aware of quotes and parenthesis and only includes them if they belong to a matching pair.\
+  Multiple adjacent delimiters are treated like a single delimiter when adjusting (no need for multiple button presses).\
+  Leading / trailing whitespace is removed.
+
+* You can carry out adjustments not only by whole sentences, but also by sentence parts (between commas).
+  Hold the `<< >>` buttons to get whole sentences, tap normally for sentence parts.
+* Grayed out preview text allows peeking before / past current context to decide whether including more context might be useful.
+* Holding the ±1 button allows jumping in larger steps (8 characters by default).
+* The sync reminder popup now shows the number of unsynced notes.
+<!-- * ~~The options menu can also be opened from the custom context menu (note: currently broken).~~ -->
+* Added a variety of settings to allow better customization depending on your workflow.
+    - Whether to also close the dictionary window after creating a card.
+    - Whether to always open the custom context window before creating a card.
+    - How large the default context should be (either current sentence or current sentence part).
+    - Whether to swap tap / hold behaviour for the `<< >>` buttons (adjust by sentence parts or whole sentences).
+    - How many characters of adjustment holding the ±1 buttons should produce.
+    - How many characters of preview text should be displayed.
+    - Override which characters count as sentence / sentence part delimiters, and which trailing delimiter characters should be automatically included.
+
+All settings can be set via either the config file or their corresponding menu entry.
+
+Known Issues:\
+Int settings need to be set via the config file for now since there is no number input dialog implemented yet.\
+Also some of the bool settings might behave strange for some reason and get "stuck", use the config file in that case (specifically this happens when the config file sets the option to `true`).\
 
 ## Installation
 
