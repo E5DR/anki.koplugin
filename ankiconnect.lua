@@ -230,7 +230,7 @@ function AnkiConnect:add_note(anki_note)
 
     if #self.local_notes > 0 then
         UIManager:show(ConfirmBox:new {
-            text = "There are offline notes which can be synced!",
+            text = ("There are offline notes which can be synced (%d)!"):format(#self.local_notes),
             ok_text = "Synchronize",
             cancel_text = "Cancel",
             ok_callback = function()
