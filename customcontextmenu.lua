@@ -235,7 +235,10 @@ function CustomContextMenu:init()
 
     local save_btn = make_button("Save with custom context", btn_width*4, self.on_save_cb)
     save_btn.hold_callback = function()
-        self.ui.AnkiWidget:show_config_widget() -- TODO: reference correct AnkiWidget
+        -- TODO: display config widget - either create a new one or show the existing widget (if there is one)
+        -- how do I get hold of AnkiWidget?
+        -- self.ui.AnkiWidget:show_config_widget()
+        -- UIManager:show(self.note.ui.AnkiWidget.config_widget)
     end
     self.confirm_row = HorizontalGroup:new{
         align = "center",
