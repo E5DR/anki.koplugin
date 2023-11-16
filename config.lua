@@ -34,6 +34,7 @@ local Config = {
     -- Note: I don't know why, but if you set this to true, the corresponding menu item will remain stuck activated
     -- always_open_custom_context = true,
     -- Set the default context to be the current part of the sentence (between commas), instead of the whole sentence.
+    -- Note: I don't know why, but if you set this to true, the corresponding menu item will remain stuck activated
     -- default_context_is_sentence_part = false,
     -- How many chars holding the ±1 buttons will jump inside the custom context window
     -- custom_context_jump_size = 8,
@@ -41,6 +42,7 @@ local Config = {
     -- custom_context_peek_length = 12,
     -- Whether the << >> buttons should move by whole sentences (instead of sentence parts).
     -- Effectively swaps tap and hold action for those buttons.
+    -- Note: I don't know why, but if you set this to true, the corresponding menu item will remain stuck activated
     -- move_by_whole_sentences = false,
     -- Punctuation that is used to split sentences (holding the << and >> buttons)
     -- sentence_delimiters = "「」『』（）【】。！？().?!\"'",

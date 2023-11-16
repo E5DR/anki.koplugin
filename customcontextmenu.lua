@@ -79,6 +79,7 @@ function CustomContextMenu:init()
         self.pos.post_c = opts.post_c or self.pos.post_c
         self.pos.post_p = opts.post_p or self.pos.post_p
         self.pos.post_s = opts.post_s or self.pos.post_s
+        -- optimization ensures parts / sentences get properly incremented even if we only increment chars / parts
         local pos_optimized = table.pack(self.note:find_optimal_position_mark(self.pos.pre_s, self.pos.pre_p, self.pos.pre_c, self.pos.post_s, self.pos.post_p, self.pos.post_c))
         self.pos.pre_s, self.pos.pre_p, self.pos.pre_c = table.unpack(pos_optimized, 1, 3)
         self.pos.post_s, self.pos.post_p, self.pos.post_c = table.unpack(pos_optimized, 4, 6)
@@ -107,7 +108,7 @@ function CustomContextMenu:init()
             update({ post_c = 0, post_p = self.pos.post_p + inc})
         end
     end
-    
+
     local pre_s_inc = function(inc)
         if inc == 0 then
             return
